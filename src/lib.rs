@@ -1,65 +1,61 @@
 use num_bigint::{BigUint, RandomBits};
 use num_integer::Integer;
-use num_traits::cast::FromPrimitive;
 use rand::distributions::Distribution;
 use rand::thread_rng;
 
 const TRIALS: u32 = 10;
-const BIT_SIZE: u64 = 2048;
+const BIT_SIZE: u64 = 1024;
 
-fn big_uint_gen_range(max: BigUint) -> BigUint {
+fn big_uint_gen_range(max: &BigUint) -> BigUint {
     let mut rng = thread_rng();
     let dist = RandomBits::new(BIT_SIZE);
     let mut curr = dist.sample(&mut rng);
 
-    while curr > max {
+    while &curr > max {
         curr = dist.sample(&mut rng);
     }
 
     curr
 }
 
-fn factor_as_multiplication(mut d: BigUint) -> (BigUint, BigUint) {
-    let zero = BigUint::from_u32(0).unwrap();
-    let one = BigUint::from_i32(1).unwrap();
-    let two = BigUint::from_i32(2).unwrap();
-
-    let mut s = zero.clone();
-    while zero == d.clone() % two.clone() {
-        s += one.clone();
-        d /= two.clone();
+fn factor_as_multiplication(n: &BigUint) -> (BigUint, BigUint) {
+    let mut d = n.clone();
+    let mut s = BigUint::new(vec![0]);
+    while d.is_even() {
+        s = s + 1_u32;
+        d = d / 2_u32;
     }
 
     (d, s)
 }
 
-fn miller_rabin(n: BigUint) -> bool {
-    let zero = BigUint::from_u32(0).unwrap();
-    let one = BigUint::from_i32(1).unwrap();
-    let two = BigUint::from_i32(2).unwrap();
-
+fn miller_rabin(n: &BigUint) -> bool {
     if n.is_even() {
         return false;
     }
 
-    let (d, s) = factor_as_multiplication(n.clone() - one.clone());
+    let n_minus_one = n.clone() - 1_u32;
+    let (d, s) = factor_as_multiplication(&n_minus_one);
+    let s_minus_one = s.clone() - 1_u32;
 
     'witness: for _i in 0..TRIALS {
-        let a = big_uint_gen_range(n.clone());
+        let a = big_uint_gen_range(&n);
         let mut x = a.modpow(&d, &n);
 
-        if x == one.clone() || x == n.clone() - one.clone() {
+        let one = BigUint::new(vec![1]);
+        if &x == &one || &x == &n_minus_one {
             continue 'witness;
         }
 
-        let mut j = zero.clone();
-        while j < s.clone() - one.clone() {
+        let mut j = BigUint::new(vec![0]);
+        while &j < &s_minus_one {
+            let two = BigUint::new(vec![2]);
             x = x.modpow(&two, &n);
-            if x == n.clone() - one.clone() {
+            if &x == &n_minus_one {
                 continue 'witness;
             }
 
-            j += one.clone();
+            j = j + 1_u32;
         }
 
         return false;
@@ -68,12 +64,40 @@ fn miller_rabin(n: BigUint) -> bool {
     true
 }
 
+fn fermat(n: &BigUint) -> bool {
+    let one = BigUint::new(vec![1]);
+    let n_minus_1 = n.clone() - 1_u32;
+
+    let a = big_uint_gen_range(&n_minus_1);
+
+    a.modpow(&n_minus_1, &n) == one
+}
+
+fn first_twenty_primes(n: &BigUint) -> bool {
+    let primes = &[
+        2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71_u32,
+    ];
+
+    let zero = BigUint::new(vec![0]);
+    for p in primes.iter() {
+        if n % p == zero {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn is_probable_prime(n: &BigUint) -> bool {
+    first_twenty_primes(n) && fermat(n) && miller_rabin(n)
+}
+
 fn gen_large_prime() -> BigUint {
     let mut rng = thread_rng();
     let dist = RandomBits::new(BIT_SIZE);
     let mut curr: BigUint = dist.sample(&mut rng);
 
-    while !miller_rabin(curr.clone()) {
+    while !is_probable_prime(&curr) {
         curr = dist.sample(&mut rng);
     }
 
