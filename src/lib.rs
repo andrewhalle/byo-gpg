@@ -4,8 +4,8 @@ use num_traits::cast::FromPrimitive;
 use rand::distributions::Distribution;
 use rand::thread_rng;
 
-const TRIALS: u32 = 1000;
-const BIT_SIZE: u64 = 128;
+const TRIALS: u32 = 10;
+const BIT_SIZE: u64 = 2048;
 
 fn big_uint_gen_range(max: BigUint) -> BigUint {
     let mut rng = thread_rng();
@@ -19,6 +19,20 @@ fn big_uint_gen_range(max: BigUint) -> BigUint {
     curr
 }
 
+fn factor_as_multiplication(mut d: BigUint) -> (BigUint, BigUint) {
+    let zero = BigUint::from_u32(0).unwrap();
+    let one = BigUint::from_i32(1).unwrap();
+    let two = BigUint::from_i32(2).unwrap();
+
+    let mut s = zero.clone();
+    while zero == d.clone() % two.clone() {
+        s += one.clone();
+        d /= two.clone();
+    }
+
+    (d, s)
+}
+
 fn miller_rabin(n: BigUint) -> bool {
     let zero = BigUint::from_u32(0).unwrap();
     let one = BigUint::from_i32(1).unwrap();
@@ -28,30 +42,27 @@ fn miller_rabin(n: BigUint) -> bool {
         return false;
     }
 
-    let mut d = n.clone() - one.clone();
+    let (d, s) = factor_as_multiplication(n.clone() - one.clone());
 
-    let mut s = zero.clone();
-    while d.clone() % two.clone() == zero.clone() {
-        s += one.clone();
-        d /= two.clone();
-    }
-
-    for _i in 0..TRIALS {
+    'witness: for _i in 0..TRIALS {
         let a = big_uint_gen_range(n.clone());
-        let test = a.modpow(&d, &n);
-        if test != one.clone() {
-            let mut curr = one.clone();
-            let mut i = zero.clone();
-            while i < s.clone() - one.clone() {
-                let test = a.modpow(&(curr.clone() * d.clone()), &n);
-                if test != n.clone() - one.clone() {
-                    return false;
-                }
+        let mut x = a.modpow(&d, &n);
 
-                i += one.clone();
-                curr *= two.clone();
-            }
+        if x == one.clone() || x == n.clone() - one.clone() {
+            continue 'witness;
         }
+
+        let mut j = zero.clone();
+        while j < s.clone() - one.clone() {
+            x = x.modpow(&two, &n);
+            if x == n.clone() - one.clone() {
+                continue 'witness;
+            }
+
+            j += one.clone();
+        }
+
+        return false;
     }
 
     true
