@@ -1,0 +1,25 @@
+[2020-08-30T14:42:47-0700]
+
+goals:
+  * generate key
+  * import keys
+  * generate encrypted message
+  * decrypt message
+  * sign message
+  * verify signed message
+  * completely compatible with gpg
+
+start with RSA, consider other algorithms later. first thing to do,
+generate large primes. use `num` crate to get bigint functionaltiy
+(BigUint). it also has a random sampler, so that's easy. Use primality
+testing (first basic testing against the first few primes, then fermat,
+then miller/rabin) to determine whether the randomly generated number
+is prime. Finally, parallelize prime generation with rayon (this was
+particularly satisfying, the code changes were minimal, just switching
+to use the `parallel` iterator, and the `find_any` combinator. the speedup
+was immense, down from about 10 seconds to under 1 second for 1024 bit primes,
+and down from 1-5 minutes to about 10 seconds for 2048 bit primes.)
+
+for next time: nice loading bars for the terminal to show activity while
+the primes are being generated, and actually generating the key from
+the primes.
