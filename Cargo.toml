@@ -12,3 +12,4 @@ num-bigint = { version = "0.3.0", features = ["rand"] }
 num-integer = "0.1.43"
 num-traits = "0.2.12"
 rand = "0.7"
+rayon = "1.4.0"

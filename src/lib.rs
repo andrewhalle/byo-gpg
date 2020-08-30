@@ -2,6 +2,8 @@ use num_bigint::{BigUint, RandomBits};
 use num_integer::Integer;
 use rand::distributions::Distribution;
 use rand::thread_rng;
+use rayon::iter::repeat;
+use rayon::prelude::*;
 
 const TRIALS: u32 = 10;
 const BIT_SIZE: u64 = 1024;
@@ -92,18 +94,19 @@ fn is_probable_prime(n: &BigUint) -> bool {
     first_twenty_primes(n) && fermat(n) && miller_rabin(n)
 }
 
-fn gen_large_prime() -> BigUint {
+fn gen_one_large_prime() -> (bool, BigUint) {
     let mut rng = thread_rng();
     let dist = RandomBits::new(BIT_SIZE);
-    let mut curr: BigUint = dist.sample(&mut rng);
+    let curr: BigUint = dist.sample(&mut rng);
 
-    while !is_probable_prime(&curr) {
-        curr = dist.sample(&mut rng);
-    }
-
-    curr
+    (is_probable_prime(&curr), curr)
 }
 
 pub fn gen_key() {
-    println!("{}", gen_large_prime());
+    let (_, large_prime) = repeat(())
+        .map(|_| gen_one_large_prime())
+        .find_any(|(is_prime, _)| *is_prime)
+        .unwrap();
+
+    println!("{}", large_prime);
 }
