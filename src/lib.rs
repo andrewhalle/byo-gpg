@@ -1,24 +1,14 @@
-use num_bigint::{BigUint, RandomBits};
+use num_bigint::{BigUint, RandBigInt};
 use num_integer::Integer;
-use rand::distributions::Distribution;
 use rand::thread_rng;
 use rayon::iter::repeat;
 use rayon::prelude::*;
+use std::thread;
+use std::time::Duration;
+use termprogress::prelude::*;
 
 const TRIALS: u32 = 10;
 const BIT_SIZE: u64 = 1024;
-
-fn big_uint_gen_range(max: &BigUint) -> BigUint {
-    let mut rng = thread_rng();
-    let dist = RandomBits::new(BIT_SIZE);
-    let mut curr = dist.sample(&mut rng);
-
-    while &curr > max {
-        curr = dist.sample(&mut rng);
-    }
-
-    curr
-}
 
 fn factor_as_multiplication(n: &BigUint) -> (BigUint, BigUint) {
     let mut d = n.clone();
@@ -32,6 +22,8 @@ fn factor_as_multiplication(n: &BigUint) -> (BigUint, BigUint) {
 }
 
 fn miller_rabin(n: &BigUint) -> bool {
+    let mut rng = thread_rng();
+
     if n.is_even() {
         return false;
     }
@@ -41,7 +33,7 @@ fn miller_rabin(n: &BigUint) -> bool {
     let s_minus_one = s.clone() - 1_u32;
 
     'witness: for _i in 0..TRIALS {
-        let a = big_uint_gen_range(&n);
+        let a = rng.gen_biguint_below(&n);
         let mut x = a.modpow(&d, &n);
 
         let one = BigUint::new(vec![1]);
@@ -67,10 +59,12 @@ fn miller_rabin(n: &BigUint) -> bool {
 }
 
 fn fermat(n: &BigUint) -> bool {
+    let mut rng = thread_rng();
+
     let one = BigUint::new(vec![1]);
     let n_minus_1 = n.clone() - 1_u32;
 
-    let a = big_uint_gen_range(&n_minus_1);
+    let a = rng.gen_biguint_below(&n_minus_1);
 
     a.modpow(&n_minus_1, &n) == one
 }
@@ -94,19 +88,62 @@ fn is_probable_prime(n: &BigUint) -> bool {
     first_twenty_primes(n) && fermat(n) && miller_rabin(n)
 }
 
-fn gen_one_large_prime() -> (bool, BigUint) {
+fn gen_prime_candidate() -> (bool, BigUint) {
     let mut rng = thread_rng();
-    let dist = RandomBits::new(BIT_SIZE);
-    let curr: BigUint = dist.sample(&mut rng);
+    let num = rng.gen_biguint(BIT_SIZE);
 
-    (is_probable_prime(&curr), curr)
+    (is_probable_prime(&num), num)
 }
 
-pub fn gen_key() {
+pub fn gen_large_prime() -> BigUint {
     let (_, large_prime) = repeat(())
-        .map(|_| gen_one_large_prime())
+        .map(|_| gen_prime_candidate())
         .find_any(|(is_prime, _)| *is_prime)
         .unwrap();
 
-    println!("{}", large_prime);
+    large_prime
+}
+
+pub fn gen_key() {
+    let estimated = 5.0;
+
+    let mut p_elapsed = 0.0;
+    let mut progress = Bar::default();
+    progress.set_title("Generating p...");
+    let t = thread::spawn(move || {
+        while p_elapsed < estimated {
+            p_elapsed += 0.2;
+            progress.set_progress(f64::min(1.0, p_elapsed / estimated));
+            thread::sleep(Duration::from_millis(200));
+        }
+    });
+    let p = gen_large_prime();
+    t.join().unwrap();
+
+    let mut q_elapsed = 0.0;
+    let mut progress = Bar::default();
+    progress.set_title("Generating q...");
+    let t = thread::spawn(move || {
+        while q_elapsed < estimated {
+            q_elapsed += 0.2;
+            progress.set_progress(f64::min(1.0, q_elapsed / estimated));
+            thread::sleep(Duration::from_millis(200));
+        }
+    });
+    let q = gen_large_prime();
+    t.join().unwrap();
+
+    println!("p: {}", p);
+    println!("q: {}", q);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_probable_prime_test() {
+        let num = BigUint::new(vec![7919]);
+        assert!(is_probable_prime(&num));
+    }
 }

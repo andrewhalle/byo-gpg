@@ -23,3 +23,17 @@ and down from 1-5 minutes to about 10 seconds for 2048 bit primes.)
 for next time: nice loading bars for the terminal to show activity while
 the primes are being generated, and actually generating the key from
 the primes.
+
+[2020-09-02T20:40:50-0700]
+
+nice loading bars, let's use termprogress.
+
+started by writing a quick test for the `is_probable_prime` function,
+ended up finding a bug in my implementation because of my implementation
+of gen_range, (generating numbers of BIT_SIZE and while looping if bigger)
+found the RandBigInt trait which could do what I needed.
+
+right now, just going to hard code an estimation time, figure out how
+to actually estimate this later.
+
+[next time] generate key, try to actually encrypt something
