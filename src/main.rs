@@ -12,7 +12,7 @@ fn main() {
     )
     .get_matches();
 
-    if let Some(_) = matches.subcommand_matches("gen-key") {
+    if matches.subcommand_matches("gen-key").is_some() {
         gen_key();
     }
 }

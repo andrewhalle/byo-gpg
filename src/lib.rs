@@ -17,8 +17,8 @@ fn factor_as_multiplication(n: &BigUint) -> (BigUint, BigUint) {
     let mut d = n.clone();
     let mut s = BigUint::new(vec![0]);
     while d.is_even() {
-        s = s + 1_u32;
-        d = d / 2_u32;
+        s += 1_u32;
+        d /= 2_u32;
     }
 
     (d, s)
@@ -33,26 +33,26 @@ fn miller_rabin(n: &BigUint) -> bool {
 
     let n_minus_one = n.clone() - 1_u32;
     let (d, s) = factor_as_multiplication(&n_minus_one);
-    let s_minus_one = s.clone() - 1_u32;
+    let s_minus_one = s - 1_u32;
 
     'witness: for _i in 0..TRIALS {
         let a = rng.gen_biguint_below(&n);
         let mut x = a.modpow(&d, &n);
 
         let one = BigUint::new(vec![1]);
-        if &x == &one || &x == &n_minus_one {
+        if x == one || x == n_minus_one {
             continue 'witness;
         }
 
         let mut j = BigUint::new(vec![0]);
-        while &j < &s_minus_one {
+        while j < s_minus_one {
             let two = BigUint::new(vec![2]);
             x = x.modpow(&two, &n);
-            if &x == &n_minus_one {
+            if x == n_minus_one {
                 continue 'witness;
             }
 
-            j = j + 1_u32;
+            j += 1_u32;
         }
 
         return false;
@@ -163,7 +163,7 @@ pub fn gen_key() {
     let e = 65_537.to_bigint().unwrap();
     let ExtendedGcd { y: mut d, .. } = lambda_n.to_bigint().unwrap().extended_gcd(&e);
     if d < BigInt::zero() {
-        d = d + lambda_n.to_bigint().unwrap();
+        d += lambda_n.to_bigint().unwrap();
     }
 
     let n = n.to_biguint().unwrap();
