@@ -1,8 +1,11 @@
-use num_bigint::{BigUint, RandBigInt};
+use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt, ToBigUint};
+use num_integer::ExtendedGcd;
 use num_integer::Integer;
+use num_traits::identities::Zero;
 use rand::thread_rng;
 use rayon::iter::repeat;
 use rayon::prelude::*;
+use std::fs;
 use std::thread;
 use std::time::Duration;
 use termprogress::prelude::*;
@@ -104,8 +107,30 @@ pub fn gen_large_prime() -> BigUint {
     large_prime
 }
 
+fn carmichaels_totient_function(p: &BigUint, q: &BigUint) -> BigUint {
+    let p_minus_1 = p.clone() - 1_u32;
+    let q_minus_1 = q.clone() - 1_u32;
+
+    let mag = p_minus_1.clone() * q_minus_1.clone();
+
+    mag / p_minus_1.gcd(&q_minus_1)
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct PublicKey {
+    n: Vec<u8>,
+    e: Vec<u8>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct PrivateKey {
+    n: Vec<u8>,
+    e: Vec<u8>,
+    d: Vec<u8>,
+}
+
 pub fn gen_key() {
-    let estimated = 5.0;
+    let estimated = 1.0;
 
     let mut p_elapsed = 0.0;
     let mut progress = Bar::default();
@@ -133,8 +158,36 @@ pub fn gen_key() {
     let q = gen_large_prime();
     t.join().unwrap();
 
-    println!("p: {}", p);
-    println!("q: {}", q);
+    let n = p.clone() * q.clone();
+    let lambda_n = carmichaels_totient_function(&p, &q);
+    let e = 65_537.to_bigint().unwrap();
+    let ExtendedGcd { y: mut d, .. } = lambda_n.to_bigint().unwrap().extended_gcd(&e);
+    if d < BigInt::zero() {
+        d = d + lambda_n.to_bigint().unwrap();
+    }
+
+    let n = n.to_biguint().unwrap();
+    let e = e.to_biguint().unwrap();
+    let d = d.to_biguint().unwrap();
+
+    let pub_key = serde_json::to_string(&PublicKey {
+        n: n.to_bytes_be(),
+        e: e.to_bytes_be(),
+    })
+    .unwrap();
+
+    let priv_key = serde_json::to_string(&PrivateKey {
+        n: n.to_bytes_be(),
+        e: e.to_bytes_be(),
+        d: d.to_bytes_be(),
+    })
+    .unwrap();
+
+    fs::write("pubkey.json", pub_key).unwrap();
+    println!("Wrote public key to {}", "pubkey.json");
+
+    fs::write("privkey.json", priv_key).unwrap();
+    println!("Wrote private key to {}", "privkey.json");
 }
 
 #[cfg(test)]
