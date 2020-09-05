@@ -37,3 +37,17 @@ right now, just going to hard code an estimation time, figure out how
 to actually estimate this later.
 
 [next time] generate key, try to actually encrypt something
+
+[2020-09-04T19:41:54-0700]
+
+generated a key using the RSA procedure, thought I would have to write
+gcd and extended_gcd, but they're provided by the num crate (in the Integer
+trait). I suspect I'm still missing some nice functions that might make
+my life easier.
+
+then, wrote out the keys to a file using serde. for now, just json. eventually,
+will actually produce keys in the pgp format.
+
+[next time]
+  * encrypt something
+  * decrypt something
