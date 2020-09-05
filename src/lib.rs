@@ -190,6 +190,63 @@ pub fn gen_key() {
     println!("Wrote private key to {}", "privkey.json");
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+enum Message {
+    Ciphertext(Vec<u8>),
+    Plaintext(Vec<u8>),
+}
+
+impl Message {
+    fn encrypt(&mut self, key: &PublicKey) {
+        if let Self::Plaintext(plaintext) = self {
+            let n = BigUint::from_bytes_be(&key.n);
+            let e = BigUint::from_bytes_be(&key.e);
+
+            let padded = BigUint::from_bytes_be(&plaintext);
+            let ciphertext = padded.modpow(&e, &n);
+
+            *self = Self::Ciphertext(ciphertext.to_bytes_be());
+        }
+    }
+
+    fn decrypt(&mut self, key: &PrivateKey) {
+        if let Self::Ciphertext(ciphertext) = self {
+            let n = BigUint::from_bytes_be(&key.n);
+            let d = BigUint::from_bytes_be(&key.d);
+
+            let ciphertext = BigUint::from_bytes_be(&ciphertext);
+            let padded = ciphertext.modpow(&d, &n);
+
+            *self = Self::Plaintext(padded.to_bytes_be());
+        }
+    }
+}
+
+pub fn encrypt() {
+    let pub_key: PublicKey =
+        serde_json::from_str(&fs::read_to_string("pubkey.json").unwrap()).unwrap();
+
+    let msg = fs::read_to_string("msg.txt").unwrap();
+    let mut msg = Message::Plaintext(msg.into_bytes());
+    msg.encrypt(&pub_key);
+
+    fs::write("encrypted.json", serde_json::to_string(&msg).unwrap()).unwrap();
+}
+
+pub fn decrypt() {
+    let priv_key: PrivateKey =
+        serde_json::from_str(&fs::read_to_string("privkey.json").unwrap()).unwrap();
+
+    let mut msg: Message =
+        serde_json::from_str(&fs::read_to_string("encrypted.json").unwrap()).unwrap();
+    msg.decrypt(&priv_key);
+
+    if let Message::Plaintext(msg) = msg {
+        let msg = String::from_utf8(msg).unwrap();
+        println!("{}", msg);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

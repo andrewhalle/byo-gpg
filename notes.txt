@@ -51,3 +51,16 @@ will actually produce keys in the pgp format.
 [next time]
   * encrypt something
   * decrypt something
+
+[2020-09-05T12:06:57-0700]
+
+going to try to encrypt an integer, not worry about padding schemes yet.
+
+since a biguint can be constructed from a byte slice, I've just taken the
+string as a utf8 byte slice and used that for the message. Will want to 
+change this at some point.
+
+successfully encrypted / decrypted a message. All the file paths are hardcoded
+for right now, and decrypting the message just prints it out.
+
+[next time] command line options for specifying where the files come from
