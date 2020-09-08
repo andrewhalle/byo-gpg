@@ -64,3 +64,17 @@ successfully encrypted / decrypted a message. All the file paths are hardcoded
 for right now, and decrypting the message just prints it out.
 
 [next time] command line options for specifying where the files come from
+
+[2020-09-07T18:09:01-0700]
+
+starting with improving the command line functionality.
+
+clap makes it easy to add command line arguments, for now, I'll always accept
+filenames, and consider defaulting to stdin / stdout later, after some re-arranging
+to make that easier.
+
+wasn't happy with my struct definitons for the keys, because I was converting BigUint
+to Vec<u8> to use serde. Turns out there's a feature in num for turning on serde support,
+so was able to change these definitions.
+
+[next time] refactor, modularize, and tests

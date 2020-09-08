@@ -8,9 +8,7 @@ edition = "2018"
 
 [dependencies]
 clap = "3.0.0-beta.1"
-num-bigint = { version = "0.3.0", features = ["rand"] }
-num-integer = "0.1.43"
-num-traits = "0.2.12"
+num = { version = "0.3.0", features = ["rand", "serde"] }
 rand = "0.7"
 rayon = "1.4.0"
 termprogress = "0.3.4"

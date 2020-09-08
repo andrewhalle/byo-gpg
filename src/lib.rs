@@ -1,7 +1,7 @@
-use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt, ToBigUint};
-use num_integer::ExtendedGcd;
-use num_integer::Integer;
-use num_traits::identities::Zero;
+use num::bigint::{BigInt, BigUint, RandBigInt, ToBigInt, ToBigUint};
+use num::integer::ExtendedGcd;
+use num::integer::Integer;
+use num::traits::identities::Zero;
 use rand::thread_rng;
 use rayon::iter::repeat;
 use rayon::prelude::*;
@@ -118,18 +118,18 @@ fn carmichaels_totient_function(p: &BigUint, q: &BigUint) -> BigUint {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct PublicKey {
-    n: Vec<u8>,
-    e: Vec<u8>,
+    n: BigUint,
+    e: BigUint,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct PrivateKey {
-    n: Vec<u8>,
-    e: Vec<u8>,
-    d: Vec<u8>,
+    n: BigUint,
+    e: BigUint,
+    d: BigUint,
 }
 
-pub fn gen_key() {
+pub fn gen_key(private_key_path: &str, public_key_path: &str) {
     let estimated = 1.0;
 
     let mut p_elapsed = 0.0;
@@ -166,28 +166,24 @@ pub fn gen_key() {
         d += lambda_n.to_bigint().unwrap();
     }
 
-    let n = n.to_biguint().unwrap();
-    let e = e.to_biguint().unwrap();
-    let d = d.to_biguint().unwrap();
-
     let pub_key = serde_json::to_string(&PublicKey {
-        n: n.to_bytes_be(),
-        e: e.to_bytes_be(),
+        n: n.to_biguint().unwrap(),
+        e: e.to_biguint().unwrap(),
     })
     .unwrap();
 
     let priv_key = serde_json::to_string(&PrivateKey {
-        n: n.to_bytes_be(),
-        e: e.to_bytes_be(),
-        d: d.to_bytes_be(),
+        n: n.to_biguint().unwrap(),
+        e: e.to_biguint().unwrap(),
+        d: d.to_biguint().unwrap(),
     })
     .unwrap();
 
-    fs::write("pubkey.json", pub_key).unwrap();
-    println!("Wrote public key to {}", "pubkey.json");
+    fs::write(public_key_path, pub_key).unwrap();
+    println!("Wrote public key to {}", public_key_path);
 
-    fs::write("privkey.json", priv_key).unwrap();
-    println!("Wrote private key to {}", "privkey.json");
+    fs::write(private_key_path, priv_key).unwrap();
+    println!("Wrote private key to {}", private_key_path);
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -199,11 +195,8 @@ enum Message {
 impl Message {
     fn encrypt(&mut self, key: &PublicKey) {
         if let Self::Plaintext(plaintext) = self {
-            let n = BigUint::from_bytes_be(&key.n);
-            let e = BigUint::from_bytes_be(&key.e);
-
             let padded = BigUint::from_bytes_be(&plaintext);
-            let ciphertext = padded.modpow(&e, &n);
+            let ciphertext = padded.modpow(&key.e, &key.n);
 
             *self = Self::Ciphertext(ciphertext.to_bytes_be());
         }
@@ -211,34 +204,30 @@ impl Message {
 
     fn decrypt(&mut self, key: &PrivateKey) {
         if let Self::Ciphertext(ciphertext) = self {
-            let n = BigUint::from_bytes_be(&key.n);
-            let d = BigUint::from_bytes_be(&key.d);
-
             let ciphertext = BigUint::from_bytes_be(&ciphertext);
-            let padded = ciphertext.modpow(&d, &n);
+            let padded = ciphertext.modpow(&key.d, &key.n);
 
             *self = Self::Plaintext(padded.to_bytes_be());
         }
     }
 }
 
-pub fn encrypt() {
+pub fn encrypt(source: &str, target: &str, public_key_path: &str) {
     let pub_key: PublicKey =
-        serde_json::from_str(&fs::read_to_string("pubkey.json").unwrap()).unwrap();
+        serde_json::from_str(&fs::read_to_string(public_key_path).unwrap()).unwrap();
 
-    let msg = fs::read_to_string("msg.txt").unwrap();
+    let msg = fs::read_to_string(source).unwrap();
     let mut msg = Message::Plaintext(msg.into_bytes());
     msg.encrypt(&pub_key);
 
-    fs::write("encrypted.json", serde_json::to_string(&msg).unwrap()).unwrap();
+    fs::write(target, serde_json::to_string(&msg).unwrap()).unwrap();
 }
 
-pub fn decrypt() {
+pub fn decrypt(source: &str, private_key_path: &str) {
     let priv_key: PrivateKey =
-        serde_json::from_str(&fs::read_to_string("privkey.json").unwrap()).unwrap();
+        serde_json::from_str(&fs::read_to_string(private_key_path).unwrap()).unwrap();
 
-    let mut msg: Message =
-        serde_json::from_str(&fs::read_to_string("encrypted.json").unwrap()).unwrap();
+    let mut msg: Message = serde_json::from_str(&fs::read_to_string(source).unwrap()).unwrap();
     msg.decrypt(&priv_key);
 
     if let Message::Plaintext(msg) = msg {
