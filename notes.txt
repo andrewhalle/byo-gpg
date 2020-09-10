@@ -78,3 +78,13 @@ to Vec<u8> to use serde. Turns out there's a feature in num for turning on serde
 so was able to change these definitions.
 
 [next time] refactor, modularize, and tests
+
+[2020-09-09T20:08:35-0700]
+
+alright, time to refactor, modularize, and test. split large functions. particularly proud
+of do_task_with_progress, which uses fancy generics to take a closure, and return whatever
+the closure returns.
+
+successfully modularized, just considered function length / general areas of interest.
+
+[next time] testing

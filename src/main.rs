@@ -1,5 +1,4 @@
-use clap::clap_app;
-use pgp_rs::{decrypt, encrypt, gen_key};
+use clap::{clap_app, ArgMatches};
 
 fn main() {
     let matches = clap_app!(("pgp-rs") =>
@@ -33,20 +32,32 @@ fn main() {
     .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("gen-key") {
-        let private_key_path = matches.value_of("privateKey").unwrap_or("privkey.json");
-        let public_key_path = matches.value_of("publicKey").unwrap_or("pubkey.json");
-
-        gen_key(private_key_path, public_key_path);
+        gen_key(matches);
     } else if let Some(matches) = matches.subcommand_matches("encrypt") {
-        let source = matches.value_of("source").unwrap_or("msg.txt");
-        let target = matches.value_of("target").unwrap_or("encrypted.json");
-        let public_key_path = matches.value_of("publicKey").unwrap_or("pubkey.json");
-
-        encrypt(source, target, public_key_path);
+        encrypt(matches);
     } else if let Some(matches) = matches.subcommand_matches("decrypt") {
-        let source = matches.value_of("source").unwrap_or("encrypted.json");
-        let private_key_path = matches.value_of("privateKey").unwrap_or("privkey.json");
-
-        decrypt(source, private_key_path);
+        decrypt(matches);
     }
+}
+
+fn gen_key(matches: &ArgMatches) {
+    let private_key_path = matches.value_of("privateKey").unwrap_or("privkey.json");
+    let public_key_path = matches.value_of("publicKey").unwrap_or("pubkey.json");
+
+    pgp_rs::gen_pgp_key(private_key_path, public_key_path);
+}
+
+fn encrypt(matches: &ArgMatches) {
+    let source = matches.value_of("source").unwrap_or("msg.txt");
+    let target = matches.value_of("target").unwrap_or("encrypted.json");
+    let public_key_path = matches.value_of("publicKey").unwrap_or("pubkey.json");
+
+    pgp_rs::encrypt_pgp_message(source, target, public_key_path);
+}
+
+fn decrypt(matches: &ArgMatches) {
+    let source = matches.value_of("source").unwrap_or("encrypted.json");
+    let private_key_path = matches.value_of("privateKey").unwrap_or("privkey.json");
+
+    pgp_rs::decrypt_pgp_message(source, private_key_path);
 }
