@@ -88,3 +88,8 @@ the closure returns.
 successfully modularized, just considered function length / general areas of interest.
 
 [next time] testing
+
+[2020-09-12T10:58:22-0700]
+
+alright, let's write some tests. had to do a bit of refactoring to remove randomness from
+some functions with logic.

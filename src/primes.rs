@@ -33,9 +33,12 @@ fn first_twenty_primes(n: &BigUint) -> bool {
         2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71_u32,
     ];
 
-    let zero = BigUint::new(vec![0]);
     for p in primes.iter() {
-        if n % p == zero {
+        if n == &p.to_biguint().unwrap() {
+            return true;
+        }
+
+        if n % p == BigUint::zero() {
             return false;
         }
     }
@@ -45,13 +48,23 @@ fn first_twenty_primes(n: &BigUint) -> bool {
 
 fn fermat(n: &BigUint) -> bool {
     let mut rng = thread_rng();
-
-    let one = BigUint::new(vec![1]);
     let n_minus_1 = n.clone() - 1_u32;
 
-    let a = rng.gen_biguint_below(&n_minus_1);
+    for _i in 0..TRIALS {
+        let a = rng.gen_biguint_below(&n_minus_1);
 
-    a.modpow(&n_minus_1, &n) == one
+        if is_fermat_witness(&a, &n) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn is_fermat_witness(a: &BigUint, n: &BigUint) -> bool {
+    let n_minus_1 = n.clone() - 1_u32;
+
+    a.modpow(&n_minus_1, &n) != BigUint::one()
 }
 
 fn miller_rabin(n: &BigUint) -> bool {
@@ -73,7 +86,7 @@ fn miller_rabin(n: &BigUint) -> bool {
 
 fn is_miller_rabin_witness(a: &BigUint, n: &BigUint) -> bool {
     let n_minus_one = n.clone() - 1_u32;
-    let (d, s) = factor_as_multiplication(&n_minus_one);
+    let (d, s) = factor_as_power_of_two_times_odd(&n_minus_one);
     let s_minus_one = s - 1_u32;
 
     let mut x = a.modpow(&d, &n);
@@ -96,9 +109,9 @@ fn is_miller_rabin_witness(a: &BigUint, n: &BigUint) -> bool {
     return true;
 }
 
-fn factor_as_multiplication(n: &BigUint) -> (BigUint, BigUint) {
+fn factor_as_power_of_two_times_odd(n: &BigUint) -> (BigUint, BigUint) {
     let mut d = n.clone();
-    let mut s = BigUint::new(vec![0]);
+    let mut s = BigUint::zero();
     while d.is_even() {
         s += 1_u32;
         d /= 2_u32;
@@ -109,11 +122,44 @@ fn factor_as_multiplication(n: &BigUint) -> (BigUint, BigUint) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use num::bigint::{BigUint, ToBigUint};
+
+    fn b(n: i32) -> BigUint {
+        n.to_biguint().unwrap()
+    }
 
     #[test]
-    fn is_probable_prime_test() {
-        let num = BigUint::new(vec![7919]);
-        assert!(is_probable_prime(&num));
+    fn first_twenty_primes() {
+        assert!(super::first_twenty_primes(&b(53)));
+        assert!(!super::first_twenty_primes(&b(4757)));
+        assert!(super::first_twenty_primes(&b(1051)));
+
+        // this is actually composite, but first_twenty_primes should not detect it
+        assert!(super::first_twenty_primes(&b(1115111)));
+    }
+
+    #[test]
+    fn is_fermat_witness() {
+        assert!(!super::is_fermat_witness(&b(38), &b(221)));
+        assert!(super::is_fermat_witness(&b(24), &b(221)));
+    }
+
+    #[test]
+    fn is_miller_rabin_witness() {
+        assert!(!super::is_miller_rabin_witness(&b(174), &b(221)));
+        assert!(super::is_miller_rabin_witness(&b(137), &b(221)));
+    }
+
+    #[test]
+    fn factor_as_power_of_two_times_odd() {
+        assert_eq!(
+            super::factor_as_power_of_two_times_odd(&b(220)),
+            (b(55), b(2))
+        );
+
+        assert_eq!(
+            super::factor_as_power_of_two_times_odd(&b(890)),
+            (b(445), b(1))
+        );
     }
 }
