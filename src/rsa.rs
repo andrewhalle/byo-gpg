@@ -100,6 +100,7 @@ pub fn gen_key() -> (PublicKey, PrivateKey) {
     (public_key, private_key)
 }
 
+/// Compute Carmichael's totient function for n = pq.
 fn carmichaels_totient_function(p: &BigUint, q: &BigUint) -> BigUint {
     let p_minus_1 = p.clone() - 1_u32;
     let q_minus_1 = q.clone() - 1_u32;
@@ -107,4 +108,18 @@ fn carmichaels_totient_function(p: &BigUint, q: &BigUint) -> BigUint {
     let mag = p_minus_1.clone() * q_minus_1.clone();
 
     mag / p_minus_1.gcd(&q_minus_1)
+}
+
+#[cfg(test)]
+mod tests {
+    use num::bigint::{BigUint, ToBigUint};
+
+    fn b(n: i32) -> BigUint {
+        n.to_biguint().unwrap()
+    }
+
+    #[test]
+    fn carmichaels_totient_function() {
+        assert_eq!(super::carmichaels_totient_function(&b(3), &b(7)), b(6));
+    }
 }
