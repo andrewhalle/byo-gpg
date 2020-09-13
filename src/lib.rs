@@ -1,6 +1,7 @@
 use std::fs;
 
 mod output;
+mod pgp;
 mod primes;
 mod rsa;
 
@@ -35,3 +36,6 @@ pub fn decrypt_pgp_message(source: &str, private_key_path: &str) {
         println!("{}", msg);
     }
 }
+
+// XXX remove me
+pub use pgp::CleartextSignature;

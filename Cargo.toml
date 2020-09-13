@@ -14,3 +14,4 @@ rayon = "1.4.0"
 termprogress = "0.3.4"
 serde_json = "1.0.57"
 serde = { version = "1.0.115", features = ["default", "derive"] }
+nom = "5.1.2"

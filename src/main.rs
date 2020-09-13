@@ -28,6 +28,9 @@ fn main() {
             (@arg privateKey: --privateKey +takes_value
                 "Sets the private key output file. Defaults to 'privkey.json'.")
         )
+        (@subcommand ("t") =>
+            (about: "INTERNAL trigger a test")
+        )
     )
     .get_matches();
 
@@ -37,6 +40,10 @@ fn main() {
         encrypt(matches);
     } else if let Some(matches) = matches.subcommand_matches("decrypt") {
         decrypt(matches);
+    } else if let Some(_matches) = matches.subcommand_matches("t") {
+        // XXX
+        let data = std::fs::read_to_string("msg.txt.asc").unwrap();
+        dbg!(pgp_rs::CleartextSignature::parse_from(&data).unwrap());
     }
 }
 

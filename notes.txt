@@ -100,3 +100,20 @@ concerns.
 
 [end 2020-09-12T11:36:53-0700]
 [next time] parse a clearsigned PGP signature into a data structure.
+
+[begin 2020-09-12T17:17:50-0700]
+
+alright, let's start parsing. link for the RFC https://tools.ietf.org/html/rfc4880 (section 7)
+and I'll be using nom https://github.com/Geal/nom.
+
+start by defining the data structure I want back.
+
+got some experience writing nom parsers. seems powerful, not sure I have
+the best handle on it yet. My code is pretty gross right now. Current parser
+is very based on the example file that I have. make this more general by better
+understanding the RFC. what are the small number of characters after the base64
+blob for? need to also parse the base64 data into actual bytes, and turn that into
+a signature defined in the RFC.
+
+[end 2020-09-12T18:53:24-0700]
+[next time] recognize dash escaping in the PGP signature parser. clean up this code. 
