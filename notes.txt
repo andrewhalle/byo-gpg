@@ -117,3 +117,13 @@ a signature defined in the RFC.
 
 [end 2020-09-12T18:53:24-0700]
 [next time] recognize dash escaping in the PGP signature parser. clean up this code. 
+
+[begin 2020-09-13T20:21:45-0700]
+
+recognizing dash escaping. i think that replacing '\n- ' with '\n' should be enough.
+also had to strip '- ' from the beginning. the rust api for stripping a prefix from a
+string slice is a little wonky, returning Option<&str> if it successfully stripped,
+else returning None.
+
+[end 2020-09-13T21:08:15-0700]
+[next time] make PgpSignature struct, turn base64 into bytes and parse it

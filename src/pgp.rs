@@ -29,14 +29,20 @@ impl CleartextSignature {
         let (_input, (signature, end_bytes)) =
             parse_pgp_signature(input).map_err(|_: nom::Err<(_, _)>| "error 4")?;
 
-        // assert end of file here
+        // assert end of file here using all_consuming
+
+        let cleartext = match cleartext.strip_prefix("- ") {
+            Some(cleartext) => cleartext,
+            None => cleartext,
+        };
+        let cleartext = cleartext.to_string().replace("\n- ", "\n");
 
         let mut signature = signature.to_string();
         signature.retain(|c| c != '\n');
 
         Ok(CleartextSignature {
             hash: Some(hash.to_string()),
-            cleartext: cleartext.to_string(),
+            cleartext,
             signature,
             end_bytes: end_bytes.to_string(),
         })
@@ -48,7 +54,10 @@ fn parse_hash_armor_header(input: &str) -> IResult<&str, &str> {
 }
 
 fn parse_cleartext(input: &str) -> IResult<&str, &str> {
-    take_until("--")(input)
+    let (left, cleartext) = take_until("\n-----BEGIN PGP SIGNATURE-----\n")(input)?;
+    let (left, _) = newline(left)?;
+
+    Ok((left, cleartext))
 }
 
 fn parse_pgp_signature(input: &str) -> IResult<&str, (&str, &str)> {
