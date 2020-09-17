@@ -127,3 +127,19 @@ else returning None.
 
 [end 2020-09-13T21:08:15-0700]
 [next time] make PgpSignature struct, turn base64 into bytes and parse it
+
+[begin 2020-09-16T19:00:37-0700]
+okay, did a little reading, found out what the small number of characters after
+the base64 blob are, they're a CRC-24 checksum of the preceding blob. See the RFC
+for implementation details (ch 6)
+
+this was a very straightforward implementation. the c implementation translated nicely
+to rust, and it worked immediately. i was also able to re-write the base64 parser to be
+more correct / account for there being no '=' at the end of the data, using fold_many0.
+parser combinators are super cool. still have a bug in my implementation that I just
+realized (when data is exactly as long as a line, won't recognize the end) but I'll fix
+that later.
+
+[end 2020-09-16T19:56:39-0700]
+[next time] fix the bug in parse_base64, implement a command `verify` instead of my current
+            test command, and start defining the structure of a PgpSignature.
