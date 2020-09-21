@@ -143,3 +143,27 @@ that later.
 [end 2020-09-16T19:56:39-0700]
 [next time] fix the bug in parse_base64, implement a command `verify` instead of my current
             test command, and start defining the structure of a PgpSignature.
+
+[begin 2020-09-20T17:58:26-0700]
+
+first, fixing the bug in parse_base64. wrote a real is_base_64_char function.
+
+[2020-09-20T18:14:53-0700] break for dinner
+[2020-09-20T21:08:45-0700] back
+
+should an invalid checksum be a parse error? on the one hand no, because computation is
+not part of the grammar. On the other hand, when parsing is the most convenient place to
+compute the checksum, since that's where we have access to the raw bytes of the signature
+we're about to parse. must think more on this.
+
+looks like I'll have to start dealing with packets now. i thought I would be able to just
+use new style packets, but judging from my test signature, I actually will be dealing with
+old style packets
+
+pgpdump is going to be invaluable.
+
+successfully parsing the packet header (in my example file, old version, packet tag 2, length
+307)
+
+[2020-09-20T22:19:08-0700] end
+[next time] continue with parsing the PgpPacket

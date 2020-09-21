@@ -28,9 +28,12 @@ fn main() {
             (@arg privateKey: --privateKey +takes_value
                 "Sets the private key output file. Defaults to 'privkey.json'.")
         )
-        (@subcommand ("t") =>
-            (about: "INTERNAL trigger a test")
+        (@subcommand ("verify") =>
+            (about: "verify a clearsigned message")
+            (@arg source: -s --source +takes_value
+                "Sets the source file containing the message to verify. Defaults to 'msg.txt.asc'.")
         )
+
     )
     .get_matches();
 
@@ -40,10 +43,8 @@ fn main() {
         encrypt(matches);
     } else if let Some(matches) = matches.subcommand_matches("decrypt") {
         decrypt(matches);
-    } else if let Some(_matches) = matches.subcommand_matches("t") {
-        // XXX
-        let data = std::fs::read_to_string("msg.txt.asc").unwrap();
-        dbg!(pgp_rs::CleartextSignature::parse_from(&data).unwrap());
+    } else if let Some(matches) = matches.subcommand_matches("verify") {
+        verify(matches);
     }
 }
 
@@ -67,4 +68,10 @@ fn decrypt(matches: &ArgMatches) {
     let private_key_path = matches.value_of("privateKey").unwrap_or("privkey.json");
 
     pgp_rs::decrypt_pgp_message(source, private_key_path);
+}
+
+fn verify(matches: &ArgMatches) {
+    let source = matches.value_of("source").unwrap_or("msg.txt.asc");
+
+    pgp_rs::verify_cleartext_message(source);
 }

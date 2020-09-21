@@ -6,6 +6,7 @@ mod primes;
 mod rsa;
 
 use output::{FromFile, ToFile};
+use pgp::CleartextSignature;
 use rsa::{Message, PrivateKey, PublicKey};
 
 pub fn gen_pgp_key(private_key_path: &str, public_key_path: &str) {
@@ -37,5 +38,14 @@ pub fn decrypt_pgp_message(source: &str, private_key_path: &str) {
     }
 }
 
-// XXX remove me
-pub use pgp::CleartextSignature;
+pub fn verify_cleartext_message(source: &str) {
+    let data = fs::read_to_string(source).unwrap();
+    let cleartext_signature = CleartextSignature::parse_from(&data).unwrap();
+    println!("File read. Checksum is valid.");
+
+    if cleartext_signature.verify() {
+        println!("Signature is valid.");
+    } else {
+        println!("Signature is invalid.");
+    }
+}

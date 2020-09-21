@@ -1,5 +1,6 @@
-use nom::bytes::complete::take_while_m_n;
-use nom::bytes::complete::{tag, take_till, take_until, take_while};
+use nom::bits::bits;
+use nom::bits::complete::take as take_bits;
+use nom::bytes::complete::{tag, take, take_till, take_until, take_while, take_while_m_n};
 use nom::character::complete::alphanumeric1;
 use nom::character::complete::newline;
 use nom::multi::fold_many0;
@@ -23,6 +24,14 @@ struct PgpSignature {
     data: Vec<u8>,
     checksum: Vec<u8>,
     valid_state: ValidState,
+}
+
+/// For now, only represents an old format packet.
+#[derive(Debug)]
+struct PgpPacket {
+    packet_tag: u8,
+    length_type: u8,
+    length: u32,
 }
 
 #[derive(Debug, PartialEq)]
@@ -58,11 +67,19 @@ impl CleartextSignature {
             Err("signature not validated")?;
         }
 
+        let (_, packet) =
+            PgpPacket::parse(&signature.data).map_err(|_: nom::Err<(_, _)>| "error 5")?;
+        dbg!(packet);
+
         Ok(CleartextSignature {
             hash: Some(hash.to_string()),
             cleartext,
             signature,
         })
+    }
+
+    pub fn verify(&self) -> bool {
+        true
     }
 }
 
@@ -102,6 +119,45 @@ impl PgpSignature {
     }
 }
 
+impl PgpPacket {
+    fn parse(input: &[u8]) -> IResult<&[u8], PgpPacket> {
+        let (input, (packet_tag, length_type)) = bits::<_, _, (_, _), _, _>(|input| {
+            let (input, _): (_, usize) = take_bits(2_usize)(input)?;
+            let (input, packet_tag) = take_bits(4_usize)(input)?;
+            let (input, length_type) = take_bits(2_usize)(input)?;
+
+            Ok((input, (packet_tag, length_type)))
+        })(input)?;
+
+        let length = match length_type {
+            0 => 1,
+            1 => 2,
+            2 => 4,
+            3 => u32::MAX,
+            _ => panic!("unrecognized length_type"),
+        };
+
+        let (input, packet_length_bytes) = take(length)(input)?;
+        let mut packet_length = 0_u32;
+        for (shift, elem) in packet_length_bytes
+            .iter()
+            .enumerate()
+            .map(|(i, val)| (packet_length_bytes.len() - i - 1, val))
+        {
+            packet_length |= (*elem as u32) << (shift * 8);
+        }
+
+        Ok((
+            input,
+            PgpPacket {
+                packet_tag,
+                length_type,
+                length: packet_length,
+            },
+        ))
+    }
+}
+
 fn parse_hash_armor_header(input: &str) -> IResult<&str, &str> {
     terminated(preceded(tag("Hash: "), alphanumeric1), many0(newline))(input)
 }
@@ -120,7 +176,7 @@ fn parse_base64(input: &str) -> IResult<&str, String> {
         s.push_str(item);
         s
     })(input)?;
-    let (input, remaining) = take_till(|c| c == '\n')(input)?;
+    let (input, remaining) = take_while(is_base_64_digit)(input)?;
     let (input, _) = newline(input)?;
 
     base64.push_str(remaining);
@@ -130,7 +186,7 @@ fn parse_base64(input: &str) -> IResult<&str, String> {
 
 fn parse_base64_line(input: &str) -> IResult<&str, &str> {
     let (input, res) =
-        take_while_m_n(BASE64_LINE_LENGTH, BASE64_LINE_LENGTH, |c| c != '\n')(input)?;
+        take_while_m_n(BASE64_LINE_LENGTH, BASE64_LINE_LENGTH, is_base_64_digit)(input)?;
     let (input, _) = newline(input)?;
 
     Ok((input, res))
@@ -151,4 +207,13 @@ fn crc24(data: &[u8]) -> u32 {
     }
 
     crc & 0xFFFFFF
+}
+
+fn is_base_64_digit(c: char) -> bool {
+    (c >= '0' && c <= '9')
+        || (c >= 'A' && c <= 'Z')
+        || (c >= 'a' && c <= 'z')
+        || c == '+'
+        || c == '/'
+        || c == '='
 }
