@@ -167,3 +167,22 @@ successfully parsing the packet header (in my example file, old version, packet 
 
 [2020-09-20T22:19:08-0700] end
 [next time] continue with parsing the PgpPacket
+
+[2020-09-22T20:01:26-0700] begin
+
+alright, continuing to parse PgpPacket...
+
+I think I've run into my first problem where gpg implements something not covered
+by the rfc. a signature packet contains signature subpackets, which have a type field.
+one of the packets in my test signature has type 33, which is in the private/reserved
+range of the rfc. some googling led me to this issue https://github.com/keybase/keybase-issues/issues/2668
+which shows that this is an experimental gpg addition. pgpdump recognizes this packet,
+but i think i can freely choose to ignore it, since it's not actually specified in the
+rfc.
+
+I can however recognize the date field (i tried it manually and was able to pull out
+the same date that pgpdump recognized. more on this later.)
+
+[2020-09-22T20:44:32-0700] end
+[next time] refactor PgpPacket type to allow for future subpacket types, clean up PgpPacket::parse
+            which has gotten very ugly.

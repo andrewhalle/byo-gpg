@@ -32,6 +32,15 @@ struct PgpPacket {
     packet_tag: u8,
     length_type: u8,
     length: u32,
+
+    // the below fields are actually signature packet specific, and need to be moved
+    // to a separate struct
+    version: u8,
+    signature_type: u8,
+    public_key_algorithm: u8,
+    hash_algorithm: u8,
+    hashed_subpacket_length: u16,
+    hashed_subpacket_data: Vec<u8>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -147,12 +156,55 @@ impl PgpPacket {
             packet_length |= (*elem as u32) << (shift * 8);
         }
 
+        let (input, version) = if let (input, &[version]) = take(1_usize)(input)? {
+            (input, version)
+        } else {
+            unreachable!()
+        };
+
+        let (input, signature_type) = if let (input, &[signature_type]) = take(1_usize)(input)? {
+            (input, signature_type)
+        } else {
+            unreachable!()
+        };
+
+        let (input, public_key_algorithm) =
+            if let (input, &[public_key_algorithm]) = take(1_usize)(input)? {
+                (input, public_key_algorithm)
+            } else {
+                unreachable!()
+            };
+
+        let (input, hash_algorithm) = if let (input, &[hash_algorithm]) = take(1_usize)(input)? {
+            (input, hash_algorithm)
+        } else {
+            unreachable!()
+        };
+
+        let (input, hashed_subpacket_length_bytes) = take(length)(input)?;
+        let mut hashed_subpacket_length = 0_u16;
+        for (shift, elem) in hashed_subpacket_length_bytes
+            .iter()
+            .enumerate()
+            .map(|(i, val)| (hashed_subpacket_length_bytes.len() - i - 1, val))
+        {
+            hashed_subpacket_length |= (*elem as u16) << (shift * 8);
+        }
+
+        let (input, hashed_subpacket_data) = take(hashed_subpacket_length)(input)?;
+
         Ok((
             input,
             PgpPacket {
                 packet_tag,
                 length_type,
                 length: packet_length,
+                version,
+                signature_type,
+                public_key_algorithm,
+                hash_algorithm,
+                hashed_subpacket_length,
+                hashed_subpacket_data: hashed_subpacket_data.to_owned(),
             },
         ))
     }
