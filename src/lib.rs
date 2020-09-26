@@ -1,6 +1,7 @@
 use std::fs;
 
 mod output;
+mod parsers;
 mod pgp;
 mod primes;
 mod rsa;
@@ -39,6 +40,7 @@ pub fn decrypt_pgp_message(source: &str, private_key_path: &str) {
 }
 
 pub fn verify_cleartext_message(source: &str) {
+    /*
     let data = fs::read_to_string(source).unwrap();
     let cleartext_signature = CleartextSignature::parse_from(&data).unwrap();
     println!("File read. Checksum is valid.");
@@ -48,4 +50,5 @@ pub fn verify_cleartext_message(source: &str) {
     } else {
         println!("Signature is invalid.");
     }
+    */
 }

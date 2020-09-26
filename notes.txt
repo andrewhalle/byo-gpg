@@ -186,3 +186,17 @@ the same date that pgpdump recognized. more on this later.)
 [2020-09-22T20:44:32-0700] end
 [next time] refactor PgpPacket type to allow for future subpacket types, clean up PgpPacket::parse
             which has gotten very ugly.
+
+[2020-09-26T11:34:34-0700] begin
+
+pgppacket needs to be an enum with the different types, and there should also be a pgpsubpacket type.
+pgppacket ought to have a vec of pgpsubpackets
+
+started re-arranging and had to comment out quite a bit of stuff to achieve a build. started with
+writing a parser for mpis (as defined in section 3.2 of the rfc). started parsers module, will move
+parsers previously written in the pgp module into this new module for cleanliness. will add tests at
+the same time.
+
+[2020-09-26T12:39:30-0700] end
+[next time] continue moving parsers over into parsers.rs, probably make pgp.rs a directory with signature.rs,
+            encryption.rs, etc

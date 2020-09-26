@@ -7,6 +7,7 @@ use nom::multi::fold_many0;
 use nom::multi::many0;
 use nom::sequence::{preceded, terminated};
 use nom::IResult;
+use num::BigUint;
 
 const BASE64_LINE_LENGTH: usize = 64_usize;
 const CRC24_INIT: u32 = 0xB704CE;
@@ -16,16 +17,20 @@ const CRC24_POLY: u32 = 0x1864CFB;
 pub struct CleartextSignature {
     hash: Option<String>,
     cleartext: String,
-    signature: PgpSignature,
+    //    signature: PgpSignature,
+    signature: SignaturePacket,
 }
 
+/*
 #[derive(Debug)]
 struct PgpSignature {
     data: Vec<u8>,
     checksum: Vec<u8>,
     valid_state: ValidState,
 }
+*/
 
+/*
 /// For now, only represents an old format packet.
 #[derive(Debug)]
 struct PgpPacket {
@@ -42,14 +47,50 @@ struct PgpPacket {
     hashed_subpacket_length: u16,
     hashed_subpacket_data: Vec<u8>,
 }
+*/
 
+#[derive(Debug)]
+enum PgpPacket {
+    SignaturePacket(SignaturePacket),
+}
+
+#[derive(Debug)]
+struct SignaturePacket {
+    version: u8,
+    signature_type: SignatureType,
+    public_key_algorithm: PublicKeyAlgorithm,
+    hash_algorithm: HashAlgorithm,
+    hashed_subpackets: Vec<SignatureSubPacket>,
+    unhashed_subpackets: Vec<SignatureSubPacket>,
+
+    /// holds the left 16 bits of the signed hash value.
+    signed_hash_value_head: u16,
+
+    signature: Vec<BigUint>,
+}
+
+#[derive(Debug)]
+enum SignatureType {}
+
+#[derive(Debug)]
+enum PublicKeyAlgorithm {}
+
+#[derive(Debug)]
+enum HashAlgorithm {}
+
+#[derive(Debug)]
+enum SignatureSubPacket {}
+
+/*
 #[derive(Debug, PartialEq)]
 enum ValidState {
     Unchecked,
     Valid,
     Invalid,
 }
+*/
 
+/*
 impl CleartextSignature {
     pub fn parse_from(data: &str) -> Result<CleartextSignature, &'static str> {
         // why is the type required on the map_err?
@@ -223,6 +264,7 @@ fn parse_cleartext(input: &str) -> IResult<&str, &str> {
 
 // XXX there's a bug in this, if the base64 data is exactly as long as a line, then it
 // won't recognize the end.
+// XXX think the bug is fixed, but better write a unit test for it
 fn parse_base64(input: &str) -> IResult<&str, String> {
     let (input, mut base64) = fold_many0(parse_base64_line, String::new(), |mut s, item| {
         s.push_str(item);
@@ -269,3 +311,4 @@ fn is_base_64_digit(c: char) -> bool {
         || c == '/'
         || c == '='
 }
+*/
