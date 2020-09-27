@@ -7,7 +7,7 @@ mod primes;
 mod rsa;
 
 use output::{FromFile, ToFile};
-use pgp::CleartextSignature;
+//use pgp::CleartextSignature;
 use rsa::{Message, PrivateKey, PublicKey};
 
 pub fn gen_pgp_key(private_key_path: &str, public_key_path: &str) {

@@ -200,3 +200,12 @@ the same time.
 [2020-09-26T12:39:30-0700] end
 [next time] continue moving parsers over into parsers.rs, probably make pgp.rs a directory with signature.rs,
             encryption.rs, etc
+
+[2020-09-27T16:07:52-0700] begin
+
+starting with making AsciiArmoredMessage type which will be the thing to verify the checksum, and allow
+parsing the resulting bytes into a specific PGP type.
+
+[2020-09-27T16:36:06-0700] end
+[next time] wire up AsciiArmoredMessage to the specific signature type (e.g. AsciiArmoredMessage should
+            if its type is SIGNATURE, expect one signature packet)
