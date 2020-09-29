@@ -209,3 +209,27 @@ parsing the resulting bytes into a specific PGP type.
 [2020-09-27T16:36:06-0700] end
 [next time] wire up AsciiArmoredMessage to the specific signature type (e.g. AsciiArmoredMessage should
             if its type is SIGNATURE, expect one signature packet)
+
+[2020-09-28T17:35:03-0700] begin
+
+I've drawn out the flow of parsing cleartext signatures in my notebook, getting a CleartextSignature from
+a string will happen in several stages. first, the hash, message, and ascii armor will be parsed. if that
+succeeds, then the ascii armor checksum will be checked. if that succeeds, then the ascii armor will be parsed
+into a specific struct (in this case, PgpSignature).
+
+since there are 3 phases could fail in different ways, I'll use anyhow to unite the error handling (indeed,
+make use of anyhow throughout this application) and make parse methods that return tuples of pieces that
+will be needed in later stages, rather than make a specific struct to hold them. Today, write just the new
+parser for dash-escaped text, and include anyhow.
+
+[2020-09-28T18:20:04-0700] took break for dinner
+[2020-09-28T18:44:07-0700] back
+
+I got to use unsafe! I needed to extend a string slice by one byte, which I know is safe to do once I've checked
+the next character is a newline, but there's no way to safely do so. Enter unsafe!
+
+the resulting code is incredibly clean for parsing the chunk of cleartext that's part of the signature. now I'm
+wondering if it would be possible to do just one string allocation by doing unsafe pointer stuff, returning a list
+of &str and doing unsafe to concat them all to a string, but I'm very satisfied with this.
+
+now to include anyhow. won't actually do anything with it tonight.
