@@ -233,3 +233,6 @@ wondering if it would be possible to do just one string allocation by doing unsa
 of &str and doing unsafe to concat them all to a string, but I'm very satisfied with this.
 
 now to include anyhow. won't actually do anything with it tonight.
+
+[2020-09-28T19:57:05-0700] end
+[next time] write the top level parser for (hash, msg, ascii_armor) from unstructured text
