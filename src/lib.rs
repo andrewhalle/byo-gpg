@@ -7,7 +7,7 @@ mod primes;
 mod rsa;
 
 use output::{FromFile, ToFile};
-//use pgp::CleartextSignature;
+use pgp::signature::CleartextSignature;
 use rsa::{Message, PrivateKey, PublicKey};
 
 pub fn gen_pgp_key(private_key_path: &str, public_key_path: &str) {
@@ -51,4 +51,7 @@ pub fn verify_cleartext_message(source: &str) {
         println!("Signature is invalid.");
     }
     */
+    let input = include_str!("../test_inputs/01/msg.txt.asc");
+    let cleartext_signature = CleartextSignature::parse(input).unwrap();
+    dbg!(cleartext_signature);
 }

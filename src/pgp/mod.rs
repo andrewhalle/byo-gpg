@@ -9,28 +9,65 @@ use nom::sequence::{preceded, terminated};
 use nom::IResult;
 use num::BigUint;
 
-mod signature;
+pub mod signature;
 
-use signature::SignaturePacket;
+use signature::{PgpSignature, SignaturePacket};
 
 const CRC24_INIT: u32 = 0xB704CE;
 const CRC24_POLY: u32 = 0x1864CFB;
 
 #[derive(Debug)]
-struct AsciiArmoredMessage {
-    kind: AsciiArmoredMessageKind,
+pub struct AsciiArmor {
+    kind: AsciiArmorKind,
     data: Vec<u8>,
     checksum: Vec<u8>,
 }
 
 #[derive(Debug)]
-enum AsciiArmoredMessageKind {
+pub enum AsciiArmorKind {
     Signature,
 }
 
 #[derive(Debug)]
 enum PgpPacket {
     SignaturePacket(SignaturePacket),
+}
+
+impl AsciiArmor {
+    pub fn from_parts(parts: (AsciiArmorKind, String, String)) -> anyhow::Result<AsciiArmor> {
+        let (kind, data, checksum) = parts;
+
+        let data = base64::decode(&data)?;
+        let checksum = base64::decode(&data)?;
+
+        Ok(AsciiArmor {
+            kind,
+            data,
+            checksum,
+        })
+    }
+
+    pub fn verify(&self) -> bool {
+        let checksum_computed = crc24(self.data.as_slice());
+        let checksum_stored = (self.checksum[0] as u32) << 16
+            | (self.checksum[1] as u32) << 8
+            | (self.checksum[2] as u32);
+
+        checksum_computed == checksum_stored
+    }
+
+    pub fn into_pgp_signature(&self) -> anyhow::Result<PgpSignature> {
+        Ok(PgpSignature {})
+    }
+    /*
+    fn validate(&mut self) {
+        self.valid_state = if checksum_computed == checksum_stored {
+            ValidState::Valid
+        } else {
+            ValidState::Invalid
+        }
+    }
+     */
 }
 
 /* XXX fix this to be an implementation block for AsciiArmoredMessage
@@ -58,17 +95,6 @@ impl PgpSignature {
         ))
     }
 
-    fn validate(&mut self) {
-        let checksum_computed = crc24(self.data.as_slice());
-        let checksum_stored = (self.checksum[0] as u32) << 16
-            | (self.checksum[1] as u32) << 8
-            | (self.checksum[2] as u32);
-        self.valid_state = if checksum_computed == checksum_stored {
-            ValidState::Valid
-        } else {
-            ValidState::Invalid
-        }
-    }
 }
 */
 
@@ -155,10 +181,6 @@ impl PgpPacket {
     }
 }
 */
-
-fn parse_hash_armor_header(input: &str) -> IResult<&str, &str> {
-    terminated(preceded(tag("Hash: "), alphanumeric1), many0(newline))(input)
-}
 
 fn parse_cleartext(input: &str) -> IResult<&str, &str> {
     let (left, cleartext) = take_until("\n-----BEGIN PGP SIGNATURE-----\n")(input)?;

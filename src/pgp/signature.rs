@@ -1,12 +1,17 @@
+use crate::parsers::parse_cleartext_signature_parts;
+use crate::pgp::AsciiArmor;
+use anyhow::anyhow;
 use num::BigUint;
 
 #[derive(Debug)]
 pub struct CleartextSignature {
     hash: Option<String>,
     cleartext: String,
-    //    signature: PgpSignature,
-    signature: SignaturePacket,
+    signature: PgpSignature,
 }
+
+#[derive(Debug)]
+pub struct PgpSignature {}
 
 #[derive(Debug)]
 pub struct SignaturePacket {
@@ -35,6 +40,27 @@ enum HashAlgorithm {}
 #[derive(Debug)]
 enum SignatureSubPacket {}
 
+impl CleartextSignature {
+    pub fn parse(input: &'static str) -> anyhow::Result<CleartextSignature> {
+        let (_, (hash, cleartext, ascii_armor_parts)) = parse_cleartext_signature_parts(input)?;
+
+        let ascii_armor = AsciiArmor::from_parts(ascii_armor_parts)?;
+
+        if !ascii_armor.verify() {
+            return Err(anyhow!(
+                "ascii armor failed to verify: checksum did not match"
+            ));
+        }
+
+        let signature = ascii_armor.into_pgp_signature()?;
+
+        Ok(CleartextSignature {
+            hash,
+            cleartext,
+            signature,
+        })
+    }
+}
 /* XXX lots in here needs to be fixed
 impl CleartextSignature {
     pub fn parse_from(data: &str) -> Result<CleartextSignature, &'static str> {

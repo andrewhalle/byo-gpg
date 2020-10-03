@@ -1,14 +1,24 @@
+use crate::pgp::{AsciiArmor, AsciiArmorKind};
 use byteorder::{BigEndian, ReadBytesExt};
 use nom::branch::alt;
+use nom::bytes::complete::tag;
 use nom::bytes::complete::take;
 use nom::bytes::complete::take_till;
 use nom::bytes::complete::take_while;
 use nom::bytes::complete::take_while_m_n;
+use nom::character::complete::alphanumeric1;
 use nom::character::complete::char;
 use nom::character::complete::newline;
+use nom::combinator::all_consuming;
+use nom::combinator::map;
 use nom::combinator::not;
+use nom::combinator::opt;
 use nom::combinator::peek;
 use nom::multi::fold_many0;
+use nom::multi::many0;
+use nom::sequence::preceded;
+use nom::sequence::terminated;
+use nom::sequence::tuple;
 use nom::IResult;
 use num::BigUint;
 
@@ -134,6 +144,42 @@ fn is_newline(c: char) -> bool {
     c == '\n'
 }
 
+fn parse_hash_armor_header(input: &str) -> IResult<&str, &str> {
+    terminated(preceded(tag("Hash: "), alphanumeric1), many0(newline))(input)
+}
+
+// XXX some careful typedefs will clean this up
+pub fn parse_cleartext_signature_parts(
+    input: &str,
+) -> IResult<&str, (Option<String>, String, (AsciiArmorKind, String, String))> {
+    let parser = tuple((
+        tag("-----BEGIN PGP SIGNED MESSAGE-----\n"),
+        map(opt(parse_hash_armor_header), |o| o.map(String::from)),
+        parse_possibly_dash_escaped_chunk,
+        parse_ascii_armor_parts,
+    ));
+
+    let (_, (_, hash, msg, ascii_armor_parts)) = all_consuming(parser)(input)?;
+
+    Ok(("", (hash, msg, ascii_armor_parts)))
+}
+
+// XXX refactor this to support more than just signatures
+// XXX probably typedef (String, String)
+fn parse_ascii_armor_parts(input: &str) -> IResult<&str, (AsciiArmorKind, String, String)> {
+    let parser = tuple((
+        tag("-----BEGIN PGP SIGNATURE-----\n\n"),
+        parse_base64,
+        char('='),
+        parse_base64,
+        tag("-----END PGP SIGNATURE-----\n"),
+    ));
+
+    let (input, (_, data, _, checksum, _)) = parser(input)?;
+
+    Ok((input, (AsciiArmorKind::Signature, data, checksum)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,5 +291,18 @@ mod tests {
             parse_non_dash_line(&input),
             Err(nom::Err::Error(("-aa\n", nom::error::ErrorKind::Not)))
         );
+    }
+
+    #[test]
+    fn test_parse_hash_armor_header() {
+        let input = "Hash: aaaa\n";
+        let expected = "";
+        assert_eq!(parse_hash_armor_header(&input), Ok((expected, "aaaa")));
+    }
+
+    #[test]
+    fn test_parse_cleartext_signature_parts() {
+        let input = include_str!("../test_inputs/01/msg.txt.asc");
+        let (_, (hash, msg, ascii_armor)) = parse_cleartext_signature_parts(input).unwrap();
     }
 }

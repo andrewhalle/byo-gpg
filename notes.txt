@@ -236,3 +236,14 @@ now to include anyhow. won't actually do anything with it tonight.
 
 [2020-09-28T19:57:05-0700] end
 [next time] write the top level parser for (hash, msg, ascii_armor) from unstructured text
+
+[2020-10-02T18:29:10-0700] begin
+
+writing the top-level parser for (hash, msg, ascii_armor). anyhow is a huge simplification, it forces me to clearly
+delineate the parsing from the logic that goes along with it. ex. when parsing an ascii armor, I need to turn the
+base64 string into bytes, and that needs to happen in a function that returns anyhow::Result (because I can't ? a
+base64 error in a nom parser) so I move that code into another function and make my nom parser return incomplete
+results, which I think is the correct thing to do overall.
+
+[2020-10-02T19:42:18-0700] end
+[next time] figure out why CleartextSignature::parse is returning an error, parse more of PgpSignature from AsciiArmor.
