@@ -1,5 +1,5 @@
 use crate::parsers::parse_cleartext_signature_parts;
-use crate::pgp::AsciiArmor;
+use crate::pgp::{AsciiArmor, PgpPacket};
 use anyhow::anyhow;
 use num::BigUint;
 
@@ -7,25 +7,29 @@ use num::BigUint;
 pub struct CleartextSignature {
     hash: Option<String>,
     cleartext: String,
-    signature: PgpSignature,
+    signature: SignaturePacket,
 }
 
 #[derive(Debug)]
 pub struct PgpSignature {}
 
+// XXX try not to make all field pub
 #[derive(Debug)]
 pub struct SignaturePacket {
-    version: u8,
-    signature_type: SignatureType,
-    public_key_algorithm: PublicKeyAlgorithm,
-    hash_algorithm: HashAlgorithm,
-    hashed_subpackets: Vec<SignatureSubPacket>,
-    unhashed_subpackets: Vec<SignatureSubPacket>,
+    pub version: u8,
+    //signature_type: SignatureType,            XXX
+    pub signature_type: u8,
+    //public_key_algorithm: PublicKeyAlgorithm, XXX
+    pub public_key_algorithm: u8,
+    //hash_algorithm: HashAlgorithm,            XXX
+    pub hash_algorithm: u8,
+    pub hashed_subpackets: Vec<SignatureSubPacket>,
+    pub unhashed_subpackets: Vec<SignatureSubPacket>,
 
     /// holds the left 16 bits of the signed hash value.
-    signed_hash_value_head: u16,
+    pub signed_hash_value_head: u16,
 
-    signature: Vec<BigUint>,
+    pub signature: Vec<BigUint>,
 }
 
 #[derive(Debug)]
@@ -38,7 +42,7 @@ enum PublicKeyAlgorithm {}
 enum HashAlgorithm {}
 
 #[derive(Debug)]
-enum SignatureSubPacket {}
+pub enum SignatureSubPacket {}
 
 impl CleartextSignature {
     pub fn parse(input: &'static str) -> anyhow::Result<CleartextSignature> {
@@ -52,13 +56,17 @@ impl CleartextSignature {
             ));
         }
 
-        let signature = ascii_armor.into_pgp_signature()?;
+        let mut packets = ascii_armor.into_pgp_packets()?;
 
-        Ok(CleartextSignature {
-            hash,
-            cleartext,
-            signature,
-        })
+        if let PgpPacket::SignaturePacket(signature) = packets.pop().unwrap() {
+            Ok(CleartextSignature {
+                hash,
+                cleartext,
+                signature,
+            })
+        } else {
+            Err(anyhow!("did not find a signature packet"))
+        }
     }
 }
 /* XXX lots in here needs to be fixed

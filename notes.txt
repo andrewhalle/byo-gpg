@@ -247,3 +247,24 @@ results, which I think is the correct thing to do overall.
 
 [2020-10-02T19:42:18-0700] end
 [next time] figure out why CleartextSignature::parse is returning an error, parse more of PgpSignature from AsciiArmor.
+
+[2020-10-06T19:43:50-0700] begin
+
+starting with figuring out why CleartextSignature::parse is returning an error, I think rather than have a PgpSignature
+struct, it's okay to have AsciiArmor parse into a Vec<PgpPacket> and then just store the SignaturePacket directly.
+
+there's some interdependency between my modules that I'm not 100% sold on. going to continue on and worry about it
+later when I assign myself a refactoring task.
+
+being hit with a requirement that the byte slice from which I'm parsing packets must live for the static lifetime, but
+that doesn't make sense because nothing about the parser should be storing any reference to anything in the byte slice.
+the error is that nom::err::Err requires the slice to have static lifetime? that doesn't make sense
+
+workaround for the above error was to map the error to an anyhow error, still not quite sure why that works. I see now that
+I'm going to have to address this problem again when I come back to CleartextSignature::parse, because I accidentally made
+the parameter of that a &'static str which is not right
+
+successfully doing everything except the subpackets and the signature itself. will leave that for next time.
+
+[2020-10-06T21:11:11-0700] end
+[next time] parse hashed/unhashed subpackets and the mpis of the signature

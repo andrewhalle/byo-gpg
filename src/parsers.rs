@@ -1,5 +1,8 @@
-use crate::pgp::{AsciiArmor, AsciiArmorKind};
+use crate::pgp::signature::SignaturePacket;
+use crate::pgp::{AsciiArmor, AsciiArmorKind, PgpPacket};
 use byteorder::{BigEndian, ReadBytesExt};
+use nom::bits::bits;
+use nom::bits::complete::take as take_bits;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take;
@@ -178,6 +181,87 @@ fn parse_ascii_armor_parts(input: &str) -> IResult<&str, (AsciiArmorKind, String
     let (input, (_, data, _, checksum, _)) = parser(input)?;
 
     Ok((input, (AsciiArmorKind::Signature, data, checksum)))
+}
+
+fn take_single_byte(input: &[u8]) -> IResult<&[u8], u8> {
+    let (input, slice) = take(1_usize)(input)?;
+
+    Ok((input, slice[0]))
+}
+
+fn parse_signature_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
+    let (input, (packet_tag, length_type)): (&[u8], (u8, u8)) =
+        bits::<_, _, (_, _), _, _>(|input| {
+            let (input, _): (_, usize) = take_bits(2_usize)(input)?;
+            let (input, packet_tag) = take_bits(4_usize)(input)?;
+            let (input, length_type) = take_bits(2_usize)(input)?;
+
+            Ok((input, (packet_tag, length_type)))
+        })(input)?;
+
+    let length = match length_type {
+        0 => 1,
+        1 => 2,
+        2 => 4,
+        3 => u32::MAX,
+        _ => panic!("unrecognized length_type"),
+    };
+
+    // XXX this needs to gracefully handle lengths of different types
+    let (input, mut packet_length) = take(length)(input)?;
+    let packet_length = packet_length.read_u16::<BigEndian>().unwrap();
+
+    let (input, version) = take_single_byte(input)?;
+    let (input, signature_type) = take_single_byte(input)?;
+    let (input, public_key_algorithm) = take_single_byte(input)?;
+    let (input, hash_algorithm) = take_single_byte(input)?;
+
+    // XXX these can be parsers themselves
+    let (input, mut hashed_subpacket_length) = take(2_usize)(input)?;
+    let hashed_subpacket_length = hashed_subpacket_length.read_u16::<BigEndian>().unwrap();
+    let (input, hashed_subpacket_data) = take(hashed_subpacket_length)(input)?;
+
+    // XXX these can be parsers themselves
+    let (input, mut unhashed_subpacket_length) = take(2_usize)(input)?;
+    let unhashed_subpacket_length = unhashed_subpacket_length.read_u16::<BigEndian>().unwrap();
+    let (input, unhashed_subpacket_data) = take(unhashed_subpacket_length)(input)?;
+
+    // XXX these can be parsers themselves
+    let (input, mut signed_hash_value_head) = take(2_usize)(input)?;
+    let signed_hash_value_head = signed_hash_value_head.read_u16::<BigEndian>().unwrap();
+
+    // XXX tmp consume all input while I debug
+    let (input, _) = take(258_usize)(input)?;
+
+    Ok((
+        input,
+        PgpPacket::SignaturePacket(SignaturePacket {
+            version,
+            signature_type,
+            public_key_algorithm,
+            hash_algorithm,
+            hashed_subpackets: Vec::new(),   // XXX
+            unhashed_subpackets: Vec::new(), // XXX
+            signed_hash_value_head,
+            signature: Vec::new(), // XXX
+        }),
+    ))
+}
+
+fn parse_pgp_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
+    let parser = alt((parse_signature_packet, parse_signature_packet));
+
+    let (input, packet): (&[u8], PgpPacket) = parser(input)?;
+
+    Ok((input, packet))
+}
+
+pub fn parse_pgp_packets(input: &[u8]) -> IResult<&[u8], Vec<PgpPacket>> {
+    let parser = all_consuming(many0(parse_pgp_packet));
+
+    let (empty, packets) = parser(input)?;
+
+    Ok((empty, packets))
 }
 
 #[cfg(test)]
