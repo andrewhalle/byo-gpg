@@ -18,7 +18,7 @@ use nom::combinator::not;
 use nom::combinator::opt;
 use nom::combinator::peek;
 use nom::multi::fold_many0;
-use nom::multi::many0;
+use nom::multi::{many0, many1};
 use nom::sequence::preceded;
 use nom::sequence::terminated;
 use nom::sequence::tuple;
@@ -230,8 +230,7 @@ fn parse_signature_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
     let (input, mut signed_hash_value_head) = take(2_usize)(input)?;
     let signed_hash_value_head = signed_hash_value_head.read_u16::<BigEndian>().unwrap();
 
-    // XXX tmp consume all input while I debug
-    let (input, _) = take(258_usize)(input)?;
+    let (input, signature) = many1(parse_mpi)(input)?;
 
     Ok((
         input,
@@ -240,10 +239,12 @@ fn parse_signature_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
             signature_type,
             public_key_algorithm,
             hash_algorithm,
-            hashed_subpackets: Vec::new(),   // XXX
-            unhashed_subpackets: Vec::new(), // XXX
+            //hashed_subpackets: Vec::new(),   // XXX
+            //unhashed_subpackets: Vec::new(), // XXX
+            hashed_subpacket_data: hashed_subpacket_data.to_owned(),
+            unhashed_subpacket_data: unhashed_subpacket_data.to_owned(),
             signed_hash_value_head,
-            signature: Vec::new(), // XXX
+            signature,
         }),
     ))
 }
@@ -262,6 +263,24 @@ pub fn parse_pgp_packets(input: &[u8]) -> IResult<&[u8], Vec<PgpPacket>> {
     let (empty, packets) = parser(input)?;
 
     Ok((empty, packets))
+}
+
+pub fn parse_pkcs1(input: &[u8]) -> IResult<&[u8], BigUint> {
+    let header = tuple((
+        tag(&[0x01]),
+        take_while(|b| b == 255),
+        tag(&[0x00]),
+        tag(&[
+            0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02,
+            0x01, 0x05, 0x00, 0x04, 0x20,
+        ]),
+    ));
+
+    let (rest, _) = header(input)?;
+
+    let signature = BigUint::from_bytes_be(rest);
+
+    Ok((b"", signature))
 }
 
 #[cfg(test)]
@@ -288,13 +307,18 @@ mod tests {
 
     #[test]
     fn test_parse_base64() {
-        let input = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\naaa\n";
+        let input = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\
+                     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\
+                     aaa\n";
         let expected = "";
         assert_eq!(
             parse_base64(&input),
             Ok((
                 expected,
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned()
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\
+                 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\
+                 aaa"
+                .to_owned()
             ))
         );
     }

@@ -268,3 +268,27 @@ successfully doing everything except the subpackets and the signature itself. wi
 
 [2020-10-06T21:11:11-0700] end
 [next time] parse hashed/unhashed subpackets and the mpis of the signature
+
+[2020-10-11T16:11:11-0700] begin
+
+today, just parsing mpis. going to skip over the subpackets for now.
+
+a blog post taught me that adding a \ to a rust string literal will let you break long strings onto multiple
+lines. Absolutely incredible, and took me far too long to discover.
+
+have all the pieces in place, but now just debugging generating the hash value and comparing it to what's in the
+signature packet, which is really hard to debug because, if the answer is wrong, you just have to read over the code
+and try to find the mistake, the wrong answer itself doesn't give any information about why it's wrong.
+
+careful reading of the rfc is critical. missed the ending of "computing the hash" (5.2.4) that says v4 packets need
+to add some additional bytes to the hash trailer.
+
+calculating the hash from the data correctly, now just need to correctly compare it to the signature in the packet.
+
+alright, it's PKCS encoded according to Section 9.2 of RFC 3447. i've done a quick visual inspection, now putting
+into code.
+
+success!
+
+[2020-10-11T18:57:07-0700] end
+[next time] make this work with an input file instead of a hardcoded included file

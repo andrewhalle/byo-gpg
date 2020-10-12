@@ -53,5 +53,5 @@ pub fn verify_cleartext_message(source: &str) {
     */
     let input = include_str!("../test_inputs/01/msg.txt.asc");
     let cleartext_signature = CleartextSignature::parse(input).unwrap();
-    dbg!(cleartext_signature);
+    dbg!(cleartext_signature.verify());
 }

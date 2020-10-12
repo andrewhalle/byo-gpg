@@ -1,7 +1,10 @@
-use crate::parsers::parse_cleartext_signature_parts;
+use crate::parsers::{parse_cleartext_signature_parts, parse_pkcs1};
 use crate::pgp::{AsciiArmor, PgpPacket};
 use anyhow::anyhow;
+use byteorder::{BigEndian, WriteBytesExt};
 use num::BigUint;
+use sha2::{Digest, Sha256};
+use std::convert::TryInto;
 
 #[derive(Debug)]
 pub struct CleartextSignature {
@@ -17,15 +20,16 @@ pub struct PgpSignature {}
 #[derive(Debug)]
 pub struct SignaturePacket {
     pub version: u8,
-    //signature_type: SignatureType,            XXX
+    //signature_type: SignatureType,                    XXX
     pub signature_type: u8,
-    //public_key_algorithm: PublicKeyAlgorithm, XXX
+    //public_key_algorithm: PublicKeyAlgorithm,         XXX
     pub public_key_algorithm: u8,
-    //hash_algorithm: HashAlgorithm,            XXX
+    //hash_algorithm: HashAlgorithm,                    XXX
     pub hash_algorithm: u8,
-    pub hashed_subpackets: Vec<SignatureSubPacket>,
-    pub unhashed_subpackets: Vec<SignatureSubPacket>,
-
+    //pub hashed_subpackets: Vec<SignatureSubPacket>,   XXX
+    //pub unhashed_subpackets: Vec<SignatureSubPacket>, XXX
+    pub hashed_subpacket_data: Vec<u8>,
+    pub unhashed_subpacket_data: Vec<u8>,
     /// holds the left 16 bits of the signed hash value.
     pub signed_hash_value_head: u16,
 
@@ -68,47 +72,47 @@ impl CleartextSignature {
             Err(anyhow!("did not find a signature packet"))
         }
     }
-}
-/* XXX lots in here needs to be fixed
-impl CleartextSignature {
-    pub fn parse_from(data: &str) -> Result<CleartextSignature, &'static str> {
-        // why is the type required on the map_err?
-        let (input, _) = tag("-----BEGIN PGP SIGNED MESSAGE-----\n")(data)
-            .map_err(|_: nom::Err<(_, _)>| "error 1")?;
-        let (input, hash) =
-            parse_hash_armor_header(input).map_err(|_: nom::Err<(_, _)>| "error 2")?;
 
-        let (input, cleartext) = parse_cleartext(input).map_err(|_: nom::Err<(_, _)>| "error 3")?;
+    pub fn verify(&self) -> anyhow::Result<bool> {
+        let mut hasher = Sha256::new();
 
-        let (_input, mut signature) =
-            PgpSignature::parse(input).map_err(|_: nom::Err<(_, _)>| "error 4")?;
+        // 1. write the msg, canonicalized by replacing newlines with CRLF.
+        hasher.update(self.cleartext.replace("\n", "\r\n"));
 
-        // assert end of file here using all_consuming
+        // 2. write the initial bytes of the signature packet.
+        hasher.update(&[
+            self.signature.version,
+            self.signature.signature_type,
+            self.signature.public_key_algorithm,
+            self.signature.hash_algorithm,
+        ]);
 
-        let cleartext = match cleartext.strip_prefix("- ") {
-            Some(cleartext) => cleartext,
-            None => cleartext,
-        };
-        let cleartext = cleartext.to_string().replace("\n- ", "\n");
+        let mut buf = Vec::new();
+        let length = self.signature.hashed_subpacket_data.len().try_into()?;
+        buf.write_u16::<BigEndian>(length);
+        hasher.update(buf);
+        hasher.update(self.signature.hashed_subpacket_data.clone());
 
-        signature.validate();
-        if signature.valid_state == ValidState::Invalid {
-            Err("signature not validated")?;
-        }
+        // 3. finally, write the v4 hash trailer.
+        hasher.update(&[0x04_u8, 0xff]);
+        let mut buf = Vec::new();
+        let mut length = self.signature.hashed_subpacket_data.len().try_into()?;
+        length += 6;
+        buf.write_u32::<BigEndian>(length);
+        hasher.update(buf);
 
-        let (_, packet) =
-            PgpPacket::parse(&signature.data).map_err(|_: nom::Err<(_, _)>| "error 5")?;
-        dbg!(packet);
+        let hash = hasher.finalize();
+        let computed = BigUint::from_bytes_be(&hash);
 
-        Ok(CleartextSignature {
-            hash: Some(hash.to_string()),
-            cleartext,
-            signature,
-        })
+        let n = BigUint::from_bytes_be(&hex::decode(include_str!(
+            "../../test_inputs/01/test-key-n.txt"
+        ))?);
+        let e = BigUint::from_bytes_be(&hex::decode(include_str!(
+            "../../test_inputs/01/test-key-e.txt"
+        ))?);
+        let signature = self.signature.signature[0].modpow(&e, &n).to_bytes_be();
+        let (_, decoded) = parse_pkcs1(&signature).map_err(|_| anyhow!("Failed to parse pkcs1"))?;
+
+        Ok(decoded == computed)
     }
-
-    pub fn verify(&self) -> bool {
-        true
-    }
 }
-*/
