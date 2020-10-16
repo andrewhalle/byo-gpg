@@ -3,6 +3,7 @@ use crate::pgp::{AsciiArmor, PgpPacket};
 use anyhow::anyhow;
 use byteorder::{BigEndian, WriteBytesExt};
 use num::BigUint;
+use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::convert::TryInto;
 
@@ -49,8 +50,9 @@ enum HashAlgorithm {}
 pub enum SignatureSubPacket {}
 
 impl CleartextSignature {
-    pub fn parse(input: &'static str) -> anyhow::Result<CleartextSignature> {
-        let (_, (hash, cleartext, ascii_armor_parts)) = parse_cleartext_signature_parts(input)?;
+    pub fn parse(input: &str) -> anyhow::Result<CleartextSignature> {
+        let (_, (hash, cleartext, ascii_armor_parts)) = parse_cleartext_signature_parts(input)
+            .map_err(|_| anyhow!("failed to parse parts of cleartext signature"))?;
 
         let ascii_armor = AsciiArmor::from_parts(ascii_armor_parts)?;
 
@@ -77,7 +79,9 @@ impl CleartextSignature {
         let mut hasher = Sha256::new();
 
         // 1. write the msg, canonicalized by replacing newlines with CRLF.
-        hasher.update(self.cleartext.replace("\n", "\r\n"));
+        let r = Regex::new(r"(?P<c>[^\r])?\n")?;
+        let replaced = r.replace_all(self.cleartext.as_str(), "$c\r\n");
+        hasher.update(replaced.as_ref());
 
         // 2. write the initial bytes of the signature packet.
         hasher.update(&[

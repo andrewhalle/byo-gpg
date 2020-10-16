@@ -292,3 +292,27 @@ success!
 
 [2020-10-11T18:57:07-0700] end
 [next time] make this work with an input file instead of a hardcoded included file
+
+[2020-10-15T18:08:45-0700] begin
+
+make this work with any input file.
+
+tried the complete works of shakespeare, said the signature was invalid. tried with the first 50
+lines of the works of shakespeare, still getting the failure.
+
+bet it has to do with the CRLF. i'm currently unconditionally converting \n to \r\n. don't need
+to do that if it's already in CRLF form. using the regex crate now to replace \r\n. I also need
+to re-write parts of the parsers to account for lines that might end in \r\n. now, I've added
+a test case to my project with 2 lines in it. still trying to figure out what the bug is.
+
+it was my regex that was wrong. I was replacing [^\r]\n with \n, which was stripping the last character
+from the line. fixed by capturing the last character and adding it back in the replacement.
+
+also, capturing group needed to be optional, to get all the newlines. (e\n\n) only matched the
+first \n because the second \n doens't have a character before it that isn't \r (it has nothing)
+
+the test I was using passed, but now I have a new case that's failing.
+
+[2020-10-15T19:10:24-0700] end
+[next time] fix the text case that's currently failing (test_inputs/04) and continue trying to make
+            the full shakes.txt work

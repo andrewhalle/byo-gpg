@@ -39,19 +39,16 @@ pub fn decrypt_pgp_message(source: &str, private_key_path: &str) {
     }
 }
 
-pub fn verify_cleartext_message(source: &str) {
-    /*
+pub fn verify_cleartext_message(source: &str) -> anyhow::Result<()> {
     let data = fs::read_to_string(source).unwrap();
-    let cleartext_signature = CleartextSignature::parse_from(&data).unwrap();
+    let cleartext_signature = CleartextSignature::parse(&data).unwrap();
     println!("File read. Checksum is valid.");
 
-    if cleartext_signature.verify() {
+    if cleartext_signature.verify()? {
         println!("Signature is valid.");
     } else {
         println!("Signature is invalid.");
     }
-    */
-    let input = include_str!("../test_inputs/01/msg.txt.asc");
-    let cleartext_signature = CleartextSignature::parse(input).unwrap();
-    dbg!(cleartext_signature.verify());
+
+    Ok(())
 }
