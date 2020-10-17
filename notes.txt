@@ -331,3 +331,8 @@ going on with the failing test case.
 hard to believe but it was another newline problem. I ended up just canonicalizing in two steps, first
 turning all \r\n into \n, then turning all \n into \r\n. this gets around the issue of having mixed \r\n
 and multiple \n.
+
+now, working with shakes.txt
+
+[2020-10-17T14:26:36-0700] end
+[next time] refactor the parsing module to be a little cleaner. fix all build warnings.
