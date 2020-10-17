@@ -93,6 +93,9 @@ fn parse_non_dash_line(input: &str) -> IResult<&str, &str> {
     parse_line_newline_inclusive(input)
 }
 
+// XXX make this with with CRLF as well as \n.
+// probably by using regex to find the next \n or \r\n and taking that many bytes,
+// eliminating the unsafe.
 /// Parse until a newline is encountered, but return a string slice that includes the newline.
 fn parse_line_newline_inclusive(input: &str) -> IResult<&str, &str> {
     let (input, line) = take_till(is_newline)(input)?;
