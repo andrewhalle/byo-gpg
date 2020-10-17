@@ -79,8 +79,10 @@ impl CleartextSignature {
         let mut hasher = Sha256::new();
 
         // 1. write the msg, canonicalized by replacing newlines with CRLF.
-        let r = Regex::new(r"(?P<c>[^\r])?\n")?;
-        let replaced = r.replace_all(self.cleartext.as_str(), "$c\r\n");
+        let r = Regex::new(r"\r\n")?;
+        let replaced = r.replace_all(self.cleartext.as_str(), "\n");
+        let r = Regex::new(r"\n")?;
+        let replaced = r.replace_all(self.cleartext.as_str(), "\r\n");
         hasher.update(replaced.as_ref());
 
         // 2. write the initial bytes of the signature packet.
@@ -108,12 +110,8 @@ impl CleartextSignature {
         let hash = hasher.finalize();
         let computed = BigUint::from_bytes_be(&hash);
 
-        let n = BigUint::from_bytes_be(&hex::decode(include_str!(
-            "../../test_inputs/01/test-key-n.txt"
-        ))?);
-        let e = BigUint::from_bytes_be(&hex::decode(include_str!(
-            "../../test_inputs/01/test-key-e.txt"
-        ))?);
+        let n = BigUint::from_bytes_be(&hex::decode(include_str!("../../test-key-n.txt"))?);
+        let e = BigUint::from_bytes_be(&hex::decode(include_str!("../../test-key-e.txt"))?);
         let signature = self.signature.signature[0].modpow(&e, &n).to_bytes_be();
         let (_, decoded) = parse_pkcs1(&signature).map_err(|_| anyhow!("Failed to parse pkcs1"))?;
 

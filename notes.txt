@@ -316,3 +316,18 @@ the test I was using passed, but now I have a new case that's failing.
 [2020-10-15T19:10:24-0700] end
 [next time] fix the text case that's currently failing (test_inputs/04) and continue trying to make
             the full shakes.txt work
+
+[2020-10-17T13:11:44-0700] begin
+
+working on failing test case. discovered the assert_cmd library for running a binary as part of an
+integration test, which I'll be using to turn my test_inputs into regular tests
+
+[2020-10-17T13:30:44-0700] taking a break for lunch
+[2020-10-17T14:05:30-0700] back
+
+I've converted the main / submain functions to use anyhow::Result, now just need to figure out what's
+going on with the failing test case.
+
+hard to believe but it was another newline problem. I ended up just canonicalizing in two steps, first
+turning all \r\n into \n, then turning all \n into \r\n. this gets around the issue of having mixed \r\n
+and multiple \n.

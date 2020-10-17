@@ -410,7 +410,7 @@ mod tests {
 
     #[test]
     fn test_parse_cleartext_signature_parts() {
-        let input = include_str!("../test_inputs/01/msg.txt.asc");
+        let input = include_str!("../tests/01/msg.txt.asc");
         let (_, (hash, msg, ascii_armor)) = parse_cleartext_signature_parts(input).unwrap();
     }
 }

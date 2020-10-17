@@ -1,6 +1,7 @@
+use anyhow::anyhow;
 use clap::{clap_app, ArgMatches};
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let matches = clap_app!(("pgp-rs") =>
         (version: "0.1")
         (author: "Andrew Halle <ahalle@berkeley.edu>")
@@ -38,40 +39,42 @@ fn main() {
     .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("gen-key") {
-        gen_key(matches);
+        gen_key(matches)
     } else if let Some(matches) = matches.subcommand_matches("encrypt") {
-        encrypt(matches);
+        encrypt(matches)
     } else if let Some(matches) = matches.subcommand_matches("decrypt") {
-        decrypt(matches);
+        decrypt(matches)
     } else if let Some(matches) = matches.subcommand_matches("verify") {
-        verify(matches);
+        verify(matches)
+    } else {
+        Err(anyhow!("unknown subcommand"))
     }
 }
 
-fn gen_key(matches: &ArgMatches) {
+fn gen_key(matches: &ArgMatches) -> anyhow::Result<()> {
     let private_key_path = matches.value_of("privateKey").unwrap_or("privkey.json");
     let public_key_path = matches.value_of("publicKey").unwrap_or("pubkey.json");
 
-    pgp_rs::gen_pgp_key(private_key_path, public_key_path);
+    pgp_rs::gen_pgp_key(private_key_path, public_key_path)
 }
 
-fn encrypt(matches: &ArgMatches) {
+fn encrypt(matches: &ArgMatches) -> anyhow::Result<()> {
     let source = matches.value_of("source").unwrap_or("msg.txt");
     let target = matches.value_of("target").unwrap_or("encrypted.json");
     let public_key_path = matches.value_of("publicKey").unwrap_or("pubkey.json");
 
-    pgp_rs::encrypt_pgp_message(source, target, public_key_path);
+    pgp_rs::encrypt_pgp_message(source, target, public_key_path)
 }
 
-fn decrypt(matches: &ArgMatches) {
+fn decrypt(matches: &ArgMatches) -> anyhow::Result<()> {
     let source = matches.value_of("source").unwrap_or("encrypted.json");
     let private_key_path = matches.value_of("privateKey").unwrap_or("privkey.json");
 
-    pgp_rs::decrypt_pgp_message(source, private_key_path);
+    pgp_rs::decrypt_pgp_message(source, private_key_path)
 }
 
-fn verify(matches: &ArgMatches) {
+fn verify(matches: &ArgMatches) -> anyhow::Result<()> {
     let source = matches.value_of("source").unwrap_or("msg.txt.asc");
 
-    pgp_rs::verify_cleartext_message(source);
+    pgp_rs::verify_cleartext_message(source)
 }
