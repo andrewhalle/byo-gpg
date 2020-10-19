@@ -82,7 +82,7 @@ impl CleartextSignature {
         let r = Regex::new(r"\r\n")?;
         let replaced = r.replace_all(self.cleartext.as_str(), "\n");
         let r = Regex::new(r"\n")?;
-        let replaced = r.replace_all(self.cleartext.as_str(), "\r\n");
+        let replaced = r.replace_all(replaced.as_ref(), "\r\n");
         hasher.update(replaced.as_ref());
 
         // 2. write the initial bytes of the signature packet.
@@ -95,7 +95,7 @@ impl CleartextSignature {
 
         let mut buf = Vec::new();
         let length = self.signature.hashed_subpacket_data.len().try_into()?;
-        buf.write_u16::<BigEndian>(length);
+        buf.write_u16::<BigEndian>(length)?;
         hasher.update(buf);
         hasher.update(self.signature.hashed_subpacket_data.clone());
 
@@ -104,7 +104,7 @@ impl CleartextSignature {
         let mut buf = Vec::new();
         let mut length = self.signature.hashed_subpacket_data.len().try_into()?;
         length += 6;
-        buf.write_u32::<BigEndian>(length);
+        buf.write_u32::<BigEndian>(length)?;
         hasher.update(buf);
 
         let hash = hasher.finalize();

@@ -1,14 +1,13 @@
 use crate::pgp::signature::SignaturePacket;
-use crate::pgp::{AsciiArmor, AsciiArmorKind, PgpPacket};
+use crate::pgp::{AsciiArmorKind, PgpPacket};
 use byteorder::{BigEndian, ReadBytesExt};
 use nom::bits::bits;
-use nom::bits::complete::take as take_bits;
+use nom::bits::complete::{tag as tag_bits, take as take_bits};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take;
 use nom::bytes::complete::take_till;
 use nom::bytes::complete::take_while;
-use nom::bytes::complete::take_while_m_n;
 use nom::character::complete::alphanumeric1;
 use nom::character::complete::char;
 use nom::character::complete::newline;
@@ -25,40 +24,11 @@ use nom::sequence::tuple;
 use nom::IResult;
 use num::BigUint;
 
-const BASE64_LINE_LENGTH: usize = 64_usize;
+mod base64;
+mod pgp_utils;
 
-/// Parse a multi-precision integer (MPI) as defined by the RFC in
-/// section 3.2.
-pub fn parse_mpi(input: &[u8]) -> IResult<&[u8], BigUint> {
-    let (input, mut length) = take(2_usize)(input)?;
-    let bits = length.read_u16::<BigEndian>().unwrap();
-    let bytes = (bits + 7) / 8;
-
-    let (input, num) = take(bytes)(input)?;
-    let num = BigUint::from_bytes_be(num);
-
-    Ok((input, num))
-}
-
-/// Parse a chunk of base64 encoded text.
-fn parse_base64(input: &str) -> IResult<&str, String> {
-    let (input, mut base64) = fold_into_string(input, parse_base64_line)?;
-    let (input, remaining) = take_while(is_base_64_digit)(input)?;
-    let (input, _) = newline(input)?;
-
-    base64.push_str(remaining);
-
-    Ok((input, base64))
-}
-
-/// Parse a single line of length BASE64_LINE_LENGTH which contains only base64 characters.
-fn parse_base64_line(input: &str) -> IResult<&str, &str> {
-    let (input, res) =
-        take_while_m_n(BASE64_LINE_LENGTH, BASE64_LINE_LENGTH, is_base_64_digit)(input)?;
-    let (input, _) = newline(input)?;
-
-    Ok((input, res))
-}
+use self::base64::parse_base64;
+use pgp_utils::parse_mpi;
 
 /// Parse a set of lines (that may be dash-escaped) into a String. Stops when reaching a line
 /// that starts with a dash but is not dash-escaped.
@@ -137,15 +107,6 @@ fn fold_into_string<F: Fn(&str) -> IResult<&str, &str>>(
     })(input)
 }
 
-fn is_base_64_digit(c: char) -> bool {
-    (c >= '0' && c <= '9')
-        || (c >= 'A' && c <= 'Z')
-        || (c >= 'a' && c <= 'z')
-        || c == '+'
-        || c == '/'
-        || c == '='
-}
-
 fn is_newline(c: char) -> bool {
     c == '\n'
 }
@@ -192,15 +153,15 @@ fn take_single_byte(input: &[u8]) -> IResult<&[u8], u8> {
     Ok((input, slice[0]))
 }
 
+// XXX rewrite this to consider new format packets maybe?
 fn parse_signature_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
-    let (input, (packet_tag, length_type)): (&[u8], (u8, u8)) =
-        bits::<_, _, (_, _), _, _>(|input| {
-            let (input, _): (_, usize) = take_bits(2_usize)(input)?;
-            let (input, packet_tag) = take_bits(4_usize)(input)?;
-            let (input, length_type) = take_bits(2_usize)(input)?;
+    let (input, length_type): (&[u8], u8) = bits::<_, _, (_, _), _, _>(|input| {
+        let (input, _): (_, usize) = take_bits(2_usize)(input)?;
+        let (input, _packet_tag) = tag_bits(2, 4_usize)(input)?;
+        let (input, length_type) = take_bits(2_usize)(input)?;
 
-            Ok((input, (packet_tag, length_type)))
-        })(input)?;
+        Ok((input, length_type))
+    })(input)?;
 
     let length = match length_type {
         0 => 1,
@@ -212,7 +173,7 @@ fn parse_signature_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
 
     // XXX this needs to gracefully handle lengths of different types
     let (input, mut packet_length) = take(length)(input)?;
-    let packet_length = packet_length.read_u16::<BigEndian>().unwrap();
+    let _packet_length = packet_length.read_u16::<BigEndian>().unwrap();
 
     let (input, version) = take_single_byte(input)?;
     let (input, signature_type) = take_single_byte(input)?;
@@ -289,55 +250,6 @@ pub fn parse_pkcs1(input: &[u8]) -> IResult<&[u8], BigUint> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use num::bigint::ToBigUint;
-
-    #[test]
-    fn test_parse_mpi() {
-        let input: [u8; 4] = [0x00, 0x09, 0x01, 0xff];
-        let expected: &[u8] = &[];
-        assert_eq!(
-            parse_mpi(&input),
-            Ok((expected, 511_u32.to_biguint().unwrap()))
-        );
-
-        let input: [u8; 5] = [0x00, 0x01, 0x01, 0x23, 0x45];
-        let expected: &[u8] = &[0x23, 0x45];
-        assert_eq!(
-            parse_mpi(&input),
-            Ok((expected, 1_u32.to_biguint().unwrap()))
-        );
-    }
-
-    #[test]
-    fn test_parse_base64() {
-        let input = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\
-                     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\
-                     aaa\n";
-        let expected = "";
-        assert_eq!(
-            parse_base64(&input),
-            Ok((
-                expected,
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\
-                 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\
-                 aaa"
-                .to_owned()
-            ))
-        );
-    }
-
-    #[test]
-    fn test_parse_base64_line() {
-        let input = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nbbb";
-        let expected = "bbb";
-        assert_eq!(
-            parse_base64_line(&input),
-            Ok((
-                expected,
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            ))
-        );
-    }
 
     #[test]
     fn test_parse_possibly_dash_escaped_chunk() {
@@ -413,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_parse_cleartext_signature_parts() {
-        let input = include_str!("../tests/01/msg.txt.asc");
-        let (_, (hash, msg, ascii_armor)) = parse_cleartext_signature_parts(input).unwrap();
+        let input = include_str!("../../tests/01/msg.txt.asc");
+        let (_, (_hash, _msg, _ascii_armor)) = parse_cleartext_signature_parts(input).unwrap();
     }
 }

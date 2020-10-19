@@ -336,3 +336,12 @@ now, working with shakes.txt
 
 [2020-10-17T14:26:36-0700] end
 [next time] refactor the parsing module to be a little cleaner. fix all build warnings.
+
+[2020-10-18T17:10:31-0700] begin
+
+just some mild refactoring today. starting with the build warnings.
+
+refactoring with coc.nvim turned on is great, much easier to see what the warnings are about.
+
+[2020-10-18T17:45:35-0700] end
+[next time] finish refactoring the parsers module.

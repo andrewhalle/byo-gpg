@@ -52,7 +52,7 @@ pub fn decrypt_pgp_message(source: &str, private_key_path: &str) -> anyhow::Resu
 
 pub fn verify_cleartext_message(source: &str) -> anyhow::Result<()> {
     let data = fs::read_to_string(source).unwrap();
-    let cleartext_signature = CleartextSignature::parse(&data).unwrap();
+    let cleartext_signature = CleartextSignature::parse(&data)?;
     println!("File read. Checksum is valid.");
 
     if cleartext_signature.verify()? {
