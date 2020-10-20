@@ -1,8 +1,9 @@
-use super::fold_into_string;
 use nom::bytes::complete::take_while;
 use nom::bytes::complete::take_while_m_n;
 use nom::character::complete::newline;
 use nom::IResult;
+
+use super::utils::fold_into_string;
 
 const BASE64_LINE_LENGTH: usize = 64_usize;
 
@@ -18,6 +19,11 @@ fn is_base64_digit(c: char) -> bool {
 /// Parse a chunk of base64 encoded text.
 pub fn parse_base64(input: &str) -> IResult<&str, String> {
     let (input, mut base64) = fold_into_string(input, parse_base64_line)?;
+
+    if input.chars().next() == Some('=') {
+        return Ok((input, base64));
+    }
+
     let (input, remaining) = take_while(is_base64_digit)(input)?;
     let (input, _) = newline(input)?;
 
@@ -27,7 +33,12 @@ pub fn parse_base64(input: &str) -> IResult<&str, String> {
 }
 
 /// Parse a single line of length BASE64_LINE_LENGTH which contains only base64 characters.
+/// (and does not begin with an '='.)
 fn parse_base64_line(input: &str) -> IResult<&str, &str> {
+    if input.chars().next() == Some('=') {
+        return Err(nom::Err::Error((input, nom::error::ErrorKind::Char)));
+    }
+
     let (input, res) =
         take_while_m_n(BASE64_LINE_LENGTH, BASE64_LINE_LENGTH, is_base64_digit)(input)?;
     let (input, _) = newline(input)?;
@@ -53,6 +64,17 @@ mod tests {
                  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\
                  aaa"
                 .to_owned()
+            ))
+        );
+
+        let input = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\
+                     =a";
+        let expected = "=a";
+        assert_eq!(
+            parse_base64(&input),
+            Ok((
+                expected,
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned()
             ))
         );
     }

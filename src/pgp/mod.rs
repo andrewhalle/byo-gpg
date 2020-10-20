@@ -17,7 +17,7 @@ pub struct AsciiArmor {
     checksum: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AsciiArmorKind {
     Signature,
 }

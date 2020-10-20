@@ -345,3 +345,10 @@ refactoring with coc.nvim turned on is great, much easier to see what the warnin
 
 [2020-10-18T17:45:35-0700] end
 [next time] finish refactoring the parsers module.
+
+[2020-10-19T17:15:11-0700] begin
+
+finished refactoring the parsers module, but need to move tests around.
+
+[2020-10-19T18:02:25-0700] end
+[next time] move tests in parsers/mod.rs into the respective submodule.
