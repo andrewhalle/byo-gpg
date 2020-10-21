@@ -13,6 +13,7 @@ use nom::IResult;
 use num::BigUint;
 
 use super::base64::parse_base64;
+use super::key::parse_public_key_packet;
 use super::signature::parse_signature_packet;
 
 use crate::pgp::PgpPacket;
@@ -34,16 +35,38 @@ pub fn parse_mpi(input: &[u8]) -> IResult<&[u8], BigUint> {
 // XXX probably typedef (String, String)
 pub fn parse_ascii_armor_parts(input: &str) -> IResult<&str, (AsciiArmorKind, String, String)> {
     let parser = tuple((
-        tag("-----BEGIN PGP SIGNATURE-----\n\n"),
+        alt((
+            tag("-----BEGIN PGP SIGNATURE-----\n\n"),
+            tag("-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n"),
+        )),
         parse_base64,
         char('='),
         parse_base64,
-        tag("-----END PGP SIGNATURE-----\n"),
     ));
+    // needs to match the beginning tag("-----END PGP SIGNATURE-----\n"),
 
-    let (input, (_, data, _, checksum, _)) = parser(input)?;
+    let (input, (header, data, _, checksum)) = parser(input)?;
 
-    Ok((input, (AsciiArmorKind::Signature, data, checksum)))
+    let (kind, footer) = match header {
+        "-----BEGIN PGP SIGNATURE-----\n\n" => {
+            (AsciiArmorKind::Signature, "-----END PGP SIGNATURE-----\n")
+        }
+        "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n" => (
+            AsciiArmorKind::PublicKey,
+            "-----END PGP PUBLIC KEY BLOCK-----\n",
+        ),
+        _ => unreachable!(),
+    };
+
+    let (input, _) = tag(footer)(input)?;
+
+    Ok((input, (kind, data, checksum)))
+}
+
+pub fn parse_ascii_armor_parts_all_consuming(
+    input: &str,
+) -> IResult<&str, (AsciiArmorKind, String, String)> {
+    all_consuming(parse_ascii_armor_parts)(input)
 }
 
 pub fn parse_hash_armor_header(input: &str) -> IResult<&str, &str> {
@@ -51,7 +74,10 @@ pub fn parse_hash_armor_header(input: &str) -> IResult<&str, &str> {
 }
 
 pub fn parse_pgp_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
-    let parser = alt((parse_signature_packet, parse_signature_packet));
+    // XXX why does this cause a bug
+    let parser = alt((parse_signature_packet, parse_public_key_packet));
+    // when this doesn't?
+    // let parser = alt((parse_signature_packet, parse_public_key_packet));
 
     let (input, packet): (&[u8], PgpPacket) = parser(input)?;
 

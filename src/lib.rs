@@ -50,12 +50,15 @@ pub fn decrypt_pgp_message(source: &str, private_key_path: &str) -> anyhow::Resu
     Ok(())
 }
 
-pub fn verify_cleartext_message(source: &str) -> anyhow::Result<()> {
-    let data = fs::read_to_string(source).unwrap();
+pub fn verify_cleartext_message(source: &str, public_key_path: &str) -> anyhow::Result<()> {
+    let data = fs::read_to_string(source)?;
     let cleartext_signature = CleartextSignature::parse(&data)?;
     println!("File read. Checksum is valid.");
 
-    if cleartext_signature.verify()? {
+    let key = fs::read_to_string(public_key_path)?;
+    let key = pgp::PublicKey::parse(&key)?;
+
+    if cleartext_signature.verify(&key)? {
         println!("Signature is valid.");
     } else {
         return Err(anyhow!("Signature is invalid."));

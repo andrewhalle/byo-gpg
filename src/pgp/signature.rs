@@ -7,6 +7,8 @@ use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::convert::TryInto;
 
+use super::key::PublicKey;
+
 #[derive(Debug)]
 pub struct CleartextSignature {
     hash: Option<String>,
@@ -75,7 +77,7 @@ impl CleartextSignature {
         }
     }
 
-    pub fn verify(&self) -> anyhow::Result<bool> {
+    pub fn verify(&self, key: &PublicKey) -> anyhow::Result<bool> {
         let mut hasher = Sha256::new();
 
         // 1. write the msg, canonicalized by replacing newlines with CRLF.
@@ -110,9 +112,9 @@ impl CleartextSignature {
         let hash = hasher.finalize();
         let computed = BigUint::from_bytes_be(&hash);
 
-        let n = BigUint::from_bytes_be(&hex::decode(include_str!("../../test-key-n.txt"))?);
-        let e = BigUint::from_bytes_be(&hex::decode(include_str!("../../test-key-e.txt"))?);
-        let signature = self.signature.signature[0].modpow(&e, &n).to_bytes_be();
+        let signature = self.signature.signature[0]
+            .modpow(&key.e, &key.n)
+            .to_bytes_be();
         let (_, decoded) = parse_pkcs1(&signature).map_err(|_| anyhow!("Failed to parse pkcs1"))?;
 
         Ok(decoded == computed)

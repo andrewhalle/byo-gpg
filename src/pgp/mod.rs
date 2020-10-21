@@ -4,8 +4,10 @@ use anyhow::anyhow;
 pub mod key;
 pub mod signature;
 
-use key::KeyPacket;
+use key::PublicKeyPacket;
 use signature::SignaturePacket;
+
+pub use key::PublicKey;
 
 const CRC24_INIT: u32 = 0xB704CE;
 const CRC24_POLY: u32 = 0x1864CFB;
@@ -20,13 +22,14 @@ pub struct AsciiArmor {
 #[derive(Debug, PartialEq)]
 pub enum AsciiArmorKind {
     Signature,
+    PublicKey,
 }
 
 #[derive(Debug)]
 #[allow(unused)]
 pub enum PgpPacket {
     SignaturePacket(SignaturePacket),
-    KeyPacket(KeyPacket),
+    PublicKeyPacket(PublicKeyPacket),
 }
 
 impl AsciiArmor {

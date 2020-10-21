@@ -33,6 +33,9 @@ fn main() -> anyhow::Result<()> {
             (about: "verify a clearsigned message")
             (@arg source: -s --source +takes_value
                 "Sets the source file containing the message to verify. Defaults to 'msg.txt.asc'.")
+            (@arg publicKey: --publicKey +takes_value
+                "Sets the public key containing the public key which verifies the \
+                 message. Defaults to 'public.pgp'.")
         )
 
     )
@@ -75,6 +78,7 @@ fn decrypt(matches: &ArgMatches) -> anyhow::Result<()> {
 
 fn verify(matches: &ArgMatches) -> anyhow::Result<()> {
     let source = matches.value_of("source").unwrap_or("msg.txt.asc");
+    let public_key_path = matches.value_of("publicKey").unwrap_or("public.pgp");
 
-    pgp_rs::verify_cleartext_message(source)
+    pgp_rs::verify_cleartext_message(source, public_key_path)
 }

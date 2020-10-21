@@ -8,6 +8,8 @@ fn test_04() {
         .arg("verify")
         .arg("-s")
         .arg("./tests/04/shakes3.txt.asc")
+        .arg("--publicKey")
+        .arg("./tests/04/public.key")
         .assert()
         .success();
 }

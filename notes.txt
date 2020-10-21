@@ -352,3 +352,23 @@ finished refactoring the parsers module, but need to move tests around.
 
 [2020-10-19T18:02:25-0700] end
 [next time] move tests in parsers/mod.rs into the respective submodule.
+
+[2020-10-20T17:34:06-0700] begin
+
+move tests around the parsers module. start parsing keys.
+most tests went into the signature submodule, which makes sense.
+
+first, add key as cli option to the verify subcommand.
+
+now, thread through the key in the pgp module and the parsers module. now need to refactor the parse_ascii_armor_parts to
+work with more than just signatures.
+
+in adding the parse_public_key_packet function, I've run into a bug, adding the parse_public_key_packet as an alternative
+to parse_pgp_packet shouldn't cause an error, since it should never actually get to be called, but it does. need to resolve
+this next time.
+
+actually resolved it this time. I just needed my parse_public_key_packet function to return an error by default, since it's used
+in an alt.
+
+[2020-10-20T18:37:42-0700] end
+[next time] implement parse_public_key_packet
