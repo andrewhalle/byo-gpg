@@ -1,7 +1,5 @@
 use super::utils::fold_into_string;
 use byteorder::{BigEndian, ReadBytesExt};
-use nom::bits::bits;
-use nom::bits::complete::{tag as tag_bits, take as take_bits};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take;
@@ -68,28 +66,7 @@ pub fn parse_cleartext_signature_parts(
     Ok(("", (hash, msg, ascii_armor_parts)))
 }
 
-// XXX rewrite this to consider new format packets maybe?
 pub fn parse_signature_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
-    let (input, length_type): (&[u8], u8) = bits::<_, _, (_, _), _, _>(|input| {
-        let (input, _): (_, usize) = take_bits(2_usize)(input)?;
-        let (input, _packet_tag) = tag_bits(2, 4_usize)(input)?;
-        let (input, length_type) = take_bits(2_usize)(input)?;
-
-        Ok((input, length_type))
-    })(input)?;
-
-    let length = match length_type {
-        0 => 1,
-        1 => 2,
-        2 => 4,
-        3 => u32::MAX,
-        _ => panic!("unrecognized length_type"),
-    };
-
-    // XXX this needs to gracefully handle lengths of different types
-    let (input, mut packet_length) = take(length)(input)?;
-    let _packet_length = packet_length.read_u16::<BigEndian>().unwrap();
-
     let (input, version) = take_single_byte(input)?;
     let (input, signature_type) = take_single_byte(input)?;
     let (input, public_key_algorithm) = take_single_byte(input)?;

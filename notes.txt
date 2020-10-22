@@ -372,3 +372,11 @@ in an alt.
 
 [2020-10-20T18:37:42-0700] end
 [next time] implement parse_public_key_packet
+
+[2020-10-21T17:39:55-0700] begin
+
+successfully reading the public key from a file!
+refactored parse_pgp_packet to account for different types of packets. added a PgpPacketType enum.
+
+[2020-10-21T18:53:01-0700] end
+jumping over to windows to work on windows compatibility

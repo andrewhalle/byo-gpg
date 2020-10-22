@@ -26,10 +26,21 @@ pub enum AsciiArmorKind {
 }
 
 #[derive(Debug)]
-#[allow(unused)]
 pub enum PgpPacket {
     SignaturePacket(SignaturePacket),
     PublicKeyPacket(PublicKeyPacket),
+    // Ignored
+    UserIdPacket,
+    PublicSubkeyPacket,
+}
+
+#[derive(Debug)]
+pub enum PgpPacketTag {
+    Signature,
+    PublicKey,
+    UserId,
+    PublicSubkey,
+    Ignored,
 }
 
 impl AsciiArmor {
@@ -60,6 +71,18 @@ impl AsciiArmor {
             parse_pgp_packets(&self.data).map_err(|_| anyhow!("could not parse pgp packets"))?;
 
         Ok(packets)
+    }
+}
+
+impl From<u8> for PgpPacketTag {
+    fn from(val: u8) -> Self {
+        match val {
+            2 => PgpPacketTag::Signature,
+            6 => PgpPacketTag::PublicKey,
+            13 => PgpPacketTag::UserId,
+            14 => PgpPacketTag::PublicSubkey,
+            _ => PgpPacketTag::Ignored,
+        }
     }
 }
 

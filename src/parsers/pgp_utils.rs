@@ -1,5 +1,7 @@
 use crate::pgp::AsciiArmorKind;
 use byteorder::{BigEndian, ReadBytesExt};
+use nom::bits::bits;
+use nom::bits::complete::take as take_bits;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take;
@@ -13,10 +15,10 @@ use nom::IResult;
 use num::BigUint;
 
 use super::base64::parse_base64;
-use super::key::parse_public_key_packet;
+use super::key::{parse_public_key_packet, parse_public_subkey_packet, parse_user_id_packet};
 use super::signature::parse_signature_packet;
 
-use crate::pgp::PgpPacket;
+use crate::pgp::{PgpPacket, PgpPacketTag};
 
 /// Parse a multi-precision integer (MPI) as defined by the RFC in
 /// section 3.2.
@@ -73,13 +75,43 @@ pub fn parse_hash_armor_header(input: &str) -> IResult<&str, &str> {
     terminated(preceded(tag("Hash: "), alphanumeric1), many0(newline))(input)
 }
 
+// XXX rewrite this to consider new format packets maybe?
 pub fn parse_pgp_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
-    // XXX why does this cause a bug
-    let parser = alt((parse_signature_packet, parse_public_key_packet));
-    // when this doesn't?
-    // let parser = alt((parse_signature_packet, parse_public_key_packet));
+    let (input, (packet_tag, length_type)): (&[u8], (PgpPacketTag, u8)) =
+        bits::<_, _, (_, _), _, _>(|input| {
+            let (input, _): (_, usize) = take_bits(2_usize)(input)?;
+            let (input, packet_tag): (_, u8) = take_bits(4_usize)(input)?;
+            let (input, length_type) = take_bits(2_usize)(input)?;
 
-    let (input, packet): (&[u8], PgpPacket) = parser(input)?;
+            Ok((input, (packet_tag.into(), length_type)))
+        })(input)?;
+
+    let length = match length_type {
+        0 => 1,
+        1 => 2,
+        2 => 4,
+        3 => u32::MAX,
+        _ => panic!("unrecognized length_type"),
+    };
+
+    let (input, mut packet_length) = take(length)(input)?;
+    let packet_length = match length {
+        1 => packet_length.read_u8().unwrap().into(),
+        2 => packet_length.read_u16::<BigEndian>().unwrap().into(),
+        4 => packet_length.read_u32::<BigEndian>().unwrap(),
+        _ => unreachable!(), // XXX this should be an Err
+    };
+    let (input, data) = take(packet_length)(input)?;
+
+    let parser = all_consuming(match packet_tag {
+        PgpPacketTag::Signature => parse_signature_packet,
+        PgpPacketTag::PublicKey => parse_public_key_packet,
+        PgpPacketTag::UserId => parse_user_id_packet,
+        PgpPacketTag::PublicSubkey => parse_public_subkey_packet,
+        _ => unreachable!(), // XXX this should be an Err
+    });
+
+    let (_, packet): (&[u8], PgpPacket) = parser(data)?;
 
     Ok((input, packet))
 }

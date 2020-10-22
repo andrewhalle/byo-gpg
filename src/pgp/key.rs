@@ -11,7 +11,10 @@ pub struct PublicKey {
 }
 
 #[derive(Debug)]
-pub struct PublicKeyPacket {}
+pub struct PublicKeyPacket {
+    pub n: BigUint,
+    pub e: BigUint,
+}
 
 impl PublicKey {
     pub fn parse(input: &str) -> anyhow::Result<Self> {
@@ -19,7 +22,6 @@ impl PublicKey {
             .map_err(|_| anyhow!("could not parse ascii armor parts"))?;
 
         let ascii_armor = AsciiArmor::from_parts(parts)?;
-        /*
         let packets = ascii_armor.into_pgp_packets()?;
 
         // this is a bit hacky, I know my keys will have the key used for signing as
@@ -32,11 +34,10 @@ impl PublicKey {
                 ));
             }
         };
-        */
 
         Ok(PublicKey {
-            n: BigUint::from_bytes_be(&hex::decode(include_str!("../../test-key-n.txt"))?),
-            e: BigUint::from_bytes_be(&hex::decode(include_str!("../../test-key-e.txt"))?),
+            n: public_key_packet.n.clone(),
+            e: public_key_packet.e.clone(),
         })
     }
 }
