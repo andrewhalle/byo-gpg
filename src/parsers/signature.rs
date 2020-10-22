@@ -108,6 +108,7 @@ pub fn parse_signature_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::output::read_to_string_convert_newlines;
 
     #[test]
     fn test_parse_possibly_dash_escaped_chunk() {
@@ -183,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_parse_cleartext_signature_parts() {
-        let input = include_str!("../../tests/01/msg.txt.asc");
-        let (_, (_hash, _msg, _ascii_armor)) = parse_cleartext_signature_parts(input).unwrap();
+        let input = read_to_string_convert_newlines("./tests/01/msg.txt.asc").unwrap();
+        let (_, (_hash, _msg, _ascii_armor)) = parse_cleartext_signature_parts(&input).unwrap();
     }
 }
