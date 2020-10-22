@@ -5,6 +5,14 @@ use std::io::Result as IOResult;
 use std::thread;
 use std::time::Duration;
 use termprogress::prelude::*;
+use regex::Regex;
+
+pub fn read_to_string_convert_newlines(filename: &str) -> anyhow::Result<String> {
+    let re = Regex::new(r"\r\n")?;
+    let data = fs::read_to_string(filename)?;
+
+    Ok(re.replace_all(&data, "").to_owned().to_string())
+}
 
 pub trait ToFile: Serialize {
     fn save_to_file(&self, filename: &str) -> IOResult<()> {
@@ -13,10 +21,10 @@ pub trait ToFile: Serialize {
 }
 
 pub trait FromFile: Sized + DeserializeOwned {
-    fn from_file(filename: &str) -> IOResult<Self> {
-        let data = fs::read_to_string(filename)?;
+    fn from_file(filename: &str) -> anyhow::Result<Self> {
+        let data = read_to_string_convert_newlines(filename)?;
 
-        Ok(serde_json::from_str(&data).unwrap())
+        Ok(serde_json::from_str(data.as_ref()).unwrap())
     }
 }
 

@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use std::fs;
 
 mod output;
 mod parsers;
@@ -7,7 +6,7 @@ mod pgp;
 mod primes;
 mod rsa;
 
-use output::{FromFile, ToFile};
+use output::{FromFile, ToFile, read_to_string_convert_newlines};
 use pgp::signature::CleartextSignature;
 use rsa::{Message, PrivateKey, PublicKey};
 
@@ -27,7 +26,7 @@ pub fn encrypt_pgp_message(
 ) -> anyhow::Result<()> {
     let public_key = PublicKey::from_file(public_key_path).unwrap();
 
-    let msg = fs::read_to_string(source).unwrap();
+    let msg = read_to_string_convert_newlines(source).unwrap();
     let mut msg = Message::from_string(msg);
     msg.encrypt(&public_key);
 
@@ -51,11 +50,11 @@ pub fn decrypt_pgp_message(source: &str, private_key_path: &str) -> anyhow::Resu
 }
 
 pub fn verify_cleartext_message(source: &str, public_key_path: &str) -> anyhow::Result<()> {
-    let data = fs::read_to_string(source)?;
+    let data = read_to_string_convert_newlines(source)?;
     let cleartext_signature = CleartextSignature::parse(&data)?;
     println!("File read. Checksum is valid.");
 
-    let key = fs::read_to_string(public_key_path)?;
+    let key = read_to_string_convert_newlines(public_key_path)?;
     let key = pgp::PublicKey::parse(&key)?;
 
     if cleartext_signature.verify(&key)? {
