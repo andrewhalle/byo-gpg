@@ -17,8 +17,9 @@ use num::BigUint;
 use super::base64::parse_base64;
 use super::key::{parse_public_key_packet, parse_public_subkey_packet, parse_user_id_packet};
 use super::signature::parse_signature_packet;
+use super::utils::parse_u16;
 
-use crate::pgp::{PgpPacket, PgpPacketTag};
+use crate::pgp::{AsciiArmorParts, PgpPacket, PgpPacketTag};
 
 /// Parse a multi-precision integer (MPI) as defined by the RFC in
 /// section 3.2.
@@ -33,9 +34,7 @@ pub fn parse_mpi(input: &[u8]) -> IResult<&[u8], BigUint> {
     Ok((input, num))
 }
 
-// XXX refactor this to support more than just signatures
-// XXX probably typedef (String, String)
-pub fn parse_ascii_armor_parts(input: &str) -> IResult<&str, (AsciiArmorKind, String, String)> {
+pub fn parse_ascii_armor_parts(input: &str) -> IResult<&str, AsciiArmorParts> {
     let parser = tuple((
         alt((
             tag("-----BEGIN PGP SIGNATURE-----\n\n"),
@@ -75,7 +74,6 @@ pub fn parse_hash_armor_header(input: &str) -> IResult<&str, &str> {
     terminated(preceded(tag("Hash: "), alphanumeric1), many0(newline))(input)
 }
 
-// XXX rewrite this to consider new format packets maybe?
 pub fn parse_pgp_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
     let (input, (packet_tag, length_type)): (&[u8], (PgpPacketTag, u8)) =
         bits::<_, _, (_, _), _, _>(|input| {
@@ -99,7 +97,7 @@ pub fn parse_pgp_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
         1 => packet_length.read_u8().unwrap().into(),
         2 => packet_length.read_u16::<BigEndian>().unwrap().into(),
         4 => packet_length.read_u32::<BigEndian>().unwrap(),
-        _ => unreachable!(), // XXX this should be an Err
+        _ => unreachable!(),
     };
     let (input, data) = take(packet_length)(input)?;
 
@@ -108,7 +106,7 @@ pub fn parse_pgp_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
         PgpPacketTag::PublicKey => parse_public_key_packet,
         PgpPacketTag::UserId => parse_user_id_packet,
         PgpPacketTag::PublicSubkey => parse_public_subkey_packet,
-        _ => unreachable!(), // XXX this should be an Err
+        _ => unreachable!(),
     });
 
     let (_, packet): (&[u8], PgpPacket) = parser(data)?;
@@ -140,6 +138,12 @@ pub fn parse_pkcs1(input: &[u8]) -> IResult<&[u8], BigUint> {
     let signature = BigUint::from_bytes_be(rest);
 
     Ok((b"", signature))
+}
+
+pub fn parse_length_tagged_data(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let (input, length) = parse_u16(input)?;
+
+    take(length)(input)
 }
 
 #[cfg(test)]

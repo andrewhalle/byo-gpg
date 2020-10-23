@@ -380,3 +380,8 @@ refactored parse_pgp_packet to account for different types of packets. added a P
 
 [2020-10-21T18:53:01-0700] end
 jumping over to windows to work on windows compatibility
+
+[2020-10-22T17:12:39-0700] begin
+
+today, remove unneeded code, start the blog post. finished removing un-needed, code, did a quick cleanup
+of some basic things.

@@ -12,6 +12,8 @@ pub use key::PublicKey;
 const CRC24_INIT: u32 = 0xB704CE;
 const CRC24_POLY: u32 = 0x1864CFB;
 
+pub type AsciiArmorParts = (AsciiArmorKind, String, String);
+
 #[derive(Debug)]
 pub struct AsciiArmor {
     kind: AsciiArmorKind,
@@ -44,7 +46,7 @@ pub enum PgpPacketTag {
 }
 
 impl AsciiArmor {
-    pub fn from_parts(parts: (AsciiArmorKind, String, String)) -> anyhow::Result<AsciiArmor> {
+    pub fn from_parts(parts: AsciiArmorParts) -> anyhow::Result<AsciiArmor> {
         let (kind, data, checksum) = parts;
 
         let data = base64::decode(&data)?;

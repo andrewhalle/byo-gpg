@@ -1,21 +1,21 @@
 use super::utils::fold_into_string;
-use byteorder::{BigEndian, ReadBytesExt};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::bytes::complete::take;
 use nom::combinator::all_consuming;
 use nom::combinator::{map, not, opt, peek};
 use nom::multi::many1;
 use nom::sequence::tuple;
 use nom::IResult;
 
-use super::pgp_utils::{parse_ascii_armor_parts, parse_hash_armor_header, parse_mpi};
+use super::pgp_utils::{
+    parse_ascii_armor_parts, parse_hash_armor_header, parse_length_tagged_data, parse_mpi,
+};
 use super::utils::parse_line_newline_inclusive;
 use super::utils::take_single_byte;
-use super::utils::{parse_dash, parse_space};
+use super::utils::{parse_dash, parse_space, parse_u16};
 
-use crate::pgp::signature::SignaturePacket;
-use crate::pgp::{AsciiArmorKind, PgpPacket};
+use crate::pgp::signature::{CleartextSignatureParts, SignaturePacket};
+use crate::pgp::PgpPacket;
 
 /// Parse a set of lines (that may be dash-escaped) into a String. Stops when reaching a line
 /// that starts with a dash but is not dash-escaped.
@@ -50,10 +50,7 @@ pub fn parse_non_dash_line(input: &str) -> IResult<&str, &str> {
     parse_line_newline_inclusive(input)
 }
 
-// XXX some careful typedefs will clean this up
-pub fn parse_cleartext_signature_parts(
-    input: &str,
-) -> IResult<&str, (Option<String>, String, (AsciiArmorKind, String, String))> {
+pub fn parse_cleartext_signature_parts(input: &str) -> IResult<&str, CleartextSignatureParts> {
     let parser = tuple((
         tag("-----BEGIN PGP SIGNED MESSAGE-----\n"),
         map(opt(parse_hash_armor_header), |o| o.map(String::from)),
@@ -72,19 +69,9 @@ pub fn parse_signature_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
     let (input, public_key_algorithm) = take_single_byte(input)?;
     let (input, hash_algorithm) = take_single_byte(input)?;
 
-    // XXX these can be parsers themselves
-    let (input, mut hashed_subpacket_length) = take(2_usize)(input)?;
-    let hashed_subpacket_length = hashed_subpacket_length.read_u16::<BigEndian>().unwrap();
-    let (input, hashed_subpacket_data) = take(hashed_subpacket_length)(input)?;
-
-    // XXX these can be parsers themselves
-    let (input, mut unhashed_subpacket_length) = take(2_usize)(input)?;
-    let unhashed_subpacket_length = unhashed_subpacket_length.read_u16::<BigEndian>().unwrap();
-    let (input, unhashed_subpacket_data) = take(unhashed_subpacket_length)(input)?;
-
-    // XXX these can be parsers themselves
-    let (input, mut signed_hash_value_head) = take(2_usize)(input)?;
-    let signed_hash_value_head = signed_hash_value_head.read_u16::<BigEndian>().unwrap();
+    let (input, hashed_subpacket_data) = parse_length_tagged_data(input)?;
+    let (input, unhashed_subpacket_data) = parse_length_tagged_data(input)?;
+    let (input, signed_hash_value_head) = parse_u16(input)?;
 
     let (input, signature) = many1(parse_mpi)(input)?;
 
@@ -95,8 +82,6 @@ pub fn parse_signature_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
             signature_type,
             public_key_algorithm,
             hash_algorithm,
-            //hashed_subpackets: Vec::new(),   // XXX
-            //unhashed_subpackets: Vec::new(), // XXX
             hashed_subpacket_data: hashed_subpacket_data.to_owned(),
             unhashed_subpacket_data: unhashed_subpacket_data.to_owned(),
             signed_hash_value_head,
@@ -108,7 +93,7 @@ pub fn parse_signature_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::output::read_to_string_convert_newlines;
+    use crate::utils::read_to_string_convert_newlines;
 
     #[test]
     fn test_parse_possibly_dash_escaped_chunk() {

@@ -8,6 +8,9 @@ use sha2::{Digest, Sha256};
 use std::convert::TryInto;
 
 use super::key::PublicKey;
+use super::AsciiArmorParts;
+
+pub type CleartextSignatureParts = (Option<String>, String, AsciiArmorParts);
 
 #[derive(Debug)]
 pub struct CleartextSignature {
@@ -19,18 +22,12 @@ pub struct CleartextSignature {
 #[derive(Debug)]
 pub struct PgpSignature {}
 
-// XXX try not to make all field pub
 #[derive(Debug)]
 pub struct SignaturePacket {
     pub version: u8,
-    //signature_type: SignatureType,                    XXX
     pub signature_type: u8,
-    //public_key_algorithm: PublicKeyAlgorithm,         XXX
     pub public_key_algorithm: u8,
-    //hash_algorithm: HashAlgorithm,                    XXX
     pub hash_algorithm: u8,
-    //pub hashed_subpackets: Vec<SignatureSubPacket>,   XXX
-    //pub unhashed_subpackets: Vec<SignatureSubPacket>, XXX
     pub hashed_subpacket_data: Vec<u8>,
     pub unhashed_subpacket_data: Vec<u8>,
     /// holds the left 16 bits of the signed hash value.
