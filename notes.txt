@@ -385,3 +385,6 @@ jumping over to windows to work on windows compatibility
 
 today, remove unneeded code, start the blog post. finished removing un-needed, code, did a quick cleanup
 of some basic things.
+
+[2020-10-22T18:04:10-0700] end
+[next time] work on the post
