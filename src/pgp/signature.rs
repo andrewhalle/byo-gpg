@@ -10,11 +10,11 @@ use std::convert::TryInto;
 use super::key::PublicKey;
 use super::AsciiArmorParts;
 
-pub type CleartextSignatureParts = (Option<String>, String, AsciiArmorParts);
+pub type CleartextSignatureParts = (String, String, AsciiArmorParts);
 
 #[derive(Debug)]
 pub struct CleartextSignature {
-    hash: Option<String>,
+    hash: String,
     cleartext: String,
     signature: SignaturePacket,
 }

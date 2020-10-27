@@ -2,7 +2,7 @@ use super::utils::fold_into_string;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::all_consuming;
-use nom::combinator::{map, not, opt, peek};
+use nom::combinator::{map, not, peek};
 use nom::multi::many1;
 use nom::sequence::tuple;
 use nom::IResult;
@@ -53,7 +53,7 @@ pub fn parse_non_dash_line(input: &str) -> IResult<&str, &str> {
 pub fn parse_cleartext_signature_parts(input: &str) -> IResult<&str, CleartextSignatureParts> {
     let parser = tuple((
         tag("-----BEGIN PGP SIGNED MESSAGE-----\n"),
-        map(opt(parse_hash_armor_header), |o| o.map(String::from)),
+        map(parse_hash_armor_header, |s| String::from(s)),
         parse_possibly_dash_escaped_chunk,
         parse_ascii_armor_parts,
     ));

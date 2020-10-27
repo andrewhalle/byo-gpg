@@ -233,15 +233,220 @@ We parse the cleartext signature and the key, and then verify the signature with
 
 Now, we can get into the meat of this code, the parsing functions. In order to do *that* however, we have to take a brief detour _INTO THE RFC_. Take this `::<>`, it's dangerous to go alone.
 
-## PGP implementation
+## Implementation
 
-### PGP Packets
+The RFC containing the details of PGP is [RFC 4880](https://tools.ietf.org/html/rfc4880). The main sections of the RFC we'll need to deal with in this blog post are sections [3.2](https://tools.ietf.org/html/rfc4880#section-3.2), [4](https://tools.ietf.org/html/rfc4880#section-4), [5.2.3](https://tools.ietf.org/html/rfc4880#section-5.2.3), [5.2.4](https://tools.ietf.org/html/rfc4880#section-5.2.4), [5.5.1.1](https://tools.ietf.org/html/rfc4880#section-5.5.1.1), [6.1](https://tools.ietf.org/html/rfc4880#section-6.1), [6.2](https://tools.ietf.org/html/rfc4880#section-6.2), and [7](https://tools.ietf.org/html/rfc4880#section-7).
+
+### Cleartext signatures
+
+The functionality of PGP that we're implementing is validating _cleartext signatures_ (described in [section 7](https://tools.ietf.org/html/rfc4880#section-7) of the RFC). A cleartext signature is a signature that embeds the text being signed in a readable way into the signature itself. It has several parts:
+
+  * a header of `-----BEGIN PGP SIGNED MESSAGE-----`
+  * one or more `Hash` armor headers
+  * one empty line
+  * the dash-escaped cleartext
+  * the ASCII-armored signature
+
+We'll talk about parsing ASCII armor in the next section, but we have enough information to parse most of this already. In order to recognize a cleartext signature, we need to first look for the header, followed by a `Hash: <alg>` (`alg` in this case will be SHA256, but there are other options), an empty line, the cleartext, then finally the signature.
+
+The cleartext will be in form called "dash-escaped", which is described in the RFC. Dash-escaped text is the same as normal text, but if the line starts with a literal `-`, then it is prefixed by `- ` (dash, followed by a space). We'll know when we're done with parsing the cleartext because the ASCII armor always starts with a line beginning with 5 dashes, which we will recognize as not being dash-escaped.
+
+I'll be using [nom](https://crates.io/crates/nom) to build all the different parsers we'll need. Nom is a _parser combinator_ library. Parser combinators are a technique for writing parsers where simple parsers (say, for recognizing a literal word, or a string of characters which are all `a`) are combined to form more complex parsers.All nom parsers have the signature
+
+```rust
+fn parser<T, U>(input: T) -> IResult<T, U>
+```
+
+where `T` is the raw type we're parsing from (usually `&str` or `&[u8]`) and `U` is the type we're parsing. The parser either succeeds or fails, and if it succeeds, it returns a tuple of `(T, U)` where the first entry of the tuple is the remaining input, and the second entry of the tuple is what was parsed. For example, a simple parser that parses a `Color` enum from a string could look like
+
+```rust
+use nom::branch::alt;
+use nom::bytes::complete::tag;
+use nom::IResult;
+
+#[derive(Debug)]
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+fn parse_red(input: &str) -> IResult<&str, Color> {
+    let (input, _) = tag("Red")(input)?;
+
+    Ok((input, Color::Red))
+}
+
+fn parse_green(input: &str) -> IResult<&str, Color> {
+    let (input, _) = tag("Green")(input)?;
+
+    Ok((input, Color::Green))
+}
+
+fn parse_blue(input: &str) -> IResult<&str, Color> {
+    let (input, _) = tag("Blue")(input)?;
+
+    Ok((input, Color::Blue))
+}
+
+fn parse_color(input: &str) -> IResult<&str, Color> {
+    alt((parse_red, parse_green, parse_blue))(input)
+}
+
+fn main() {
+    let (remaining, color) = parse_color("Green123").unwrap();
+
+    println!("remaining: {}, color: {:?}", remaining, color); // remaining: 123, color: Green
+}
+```
+
+This example defines 3 parsers, `parse_red`, `parse_green`, and `parse_blue`, which look for a literal string, and if it's found, return the associated `Color` variant. If the input does not contain the string literal, the parser fails (that's why we can ignore the result of the tag parser, we know what it was, and we can return the built value we wanted). `parse_color` is then built from these basic blocks using the `alt` combinator, which succeeds if one of the parsers passed to it in a tuple succeeds, and it succeeds with that result. The `main` function then parses a single color from the string `"Green123"`, leaving the `123` string remaining.
+
+Now to parse a cleartext signature using nom, we first define a `struct` to parse into (in `pgp/signature.rs`)
+
+```rust
+#[derive(Debug)]
+pub struct CleartextSignature {
+    hash: String,
+    cleartext: String,
+    signature: SignaturePacket,
+}
+```
+
+The `hash` field will hold the hash variant we're using (could have been an enum if we were being rigorous, or supporting more than just SHA256), the cleartext (after we remove the dash-escaping), and then the signature (which we'll get to later).
+
+The parser for our cleartext signature will look like the following
+
+```rust
+pub fn parse_cleartext_signature_parts(input: &str) -> IResult<&str, CleartextSignatureParts> {
+    let parser = tuple((
+        tag("-----BEGIN PGP SIGNED MESSAGE-----\n"),
+        map(parse_hash_armor_header, |s| String::from(s)),
+        parse_possibly_dash_escaped_chunk,
+        parse_ascii_armor_parts,
+    ));
+
+    let (_, (_, hash, msg, ascii_armor_parts)) = all_consuming(parser)(input)?;
+
+    Ok(("", (hash, msg, ascii_armor_parts)))
+}
+```
+
+This parser first recognizes the header, then the hash variant, then the cleartext, then the parts of the ASCII armor. It also enforces that there's no more input to consume using the `all_consuming` parser. Assuming all that is successful, we return the pieces we need to assemble the cleartext signature.
+
+Drilling down into the methods we decreed must exist
+
+```rust
+pub fn parse_hash_armor_header(input: &str) -> IResult<&str, &str> {
+    terminated(preceded(tag("Hash: "), alphanumeric1), many0(newline))(input)
+}
+```
+
+the `parse_hash_armor_header` function recognizes an `alphanumeric1` string preceeded by `Hash: `.
+
+```rust
+/// Parse a set of lines (that may be dash-escaped) into a String. Stops when reaching a line
+/// that starts with a dash but is not dash-escaped.
+pub fn parse_possibly_dash_escaped_chunk(input: &str) -> IResult<&str, String> {
+    let (input, mut chunk) = fold_into_string(input, parse_possibly_dash_escaped_line)?;
+
+    chunk.pop();
+
+    Ok((input, chunk))
+}
+```
+
+`parse_possibly_dash_escaped_chunk` uses a helper I wrote `fold_into_string` which takes a parser that parses a single line of text and combines them into one string. We then `pop()` the last character off the string, because we don't need the last newline.
+
+```rust
+/// Parse a line of text that may be dash-escaped. If a line of text is not dash-escaped, but
+/// begins with a '-', then fail.
+pub fn parse_possibly_dash_escaped_line(input: &str) -> IResult<&str, &str> {
+    alt((parse_dash_escaped_line, parse_non_dash_line))(input)
+}
+
+/// Parse a line of text that is dash-escaped. Takes a line that begins with '- ', otherwise fails.
+pub fn parse_dash_escaped_line(input: &str) -> IResult<&str, &str> {
+    let (input, _) = parse_dash(input)?;
+    let (input, _) = parse_space(input)?;
+
+    parse_line_newline_inclusive(input)
+}
+
+/// Parse a line of text that does not begin with a dash. Line may be the empty string.
+pub fn parse_non_dash_line(input: &str) -> IResult<&str, &str> {
+    peek(not(parse_dash))(input)?;
+
+    // since peek did not error, we know the line does not begin with a dash.
+
+    parse_line_newline_inclusive(input)
+}
+```
+
+`parse_possibly_dash_escaped_line` uses the `alt` combinator we've already seen to either parse a line beginning with no dash, or a line beginning with a dash-space. `parse_line_newline_inclusive` is a helper to grab a string slice including the last newline. Because nom parsers can recognize up to the newline, but not go past it in the same breath, I needed an unsafe function to consume the newline, and then modify the resulting string slice to be 1 byte longer, which is safe because I know the next byte was a newline (or the parser would have failed).
+
+```rust
+/// Parse until a newline is encountered, but return a string slice that includes the newline.
+pub fn parse_line_newline_inclusive(input: &str) -> IResult<&str, &str> {
+    let (input, line) = take_till(is_newline)(input)?;
+    let (input, _) = newline(input)?;
+
+    // since the above did not error, we know the byte after line is a newline, so we can
+    // use unsafe to extend the slice to include the newline.
+
+    let line = unsafe { extend_str_by_one_byte(line) };
+    Ok((input, line))
+}
+
+unsafe fn extend_str_by_one_byte(s: &str) -> &str {
+    let ptr = s.as_ptr();
+    let len = s.len();
+
+    let bytes = std::slice::from_raw_parts(ptr, len + 1);
+    std::str::from_utf8(bytes).unwrap()
+}
+```
+
+Now, we can go back up and see the `Cleartext::parse` function
+
+```rust
+impl CleartextSignature {
+    pub fn parse(input: &str) -> anyhow::Result<CleartextSignature> {
+        let (_, (hash, cleartext, ascii_armor_parts)) = parse_cleartext_signature_parts(input)
+            .map_err(|_| anyhow!("failed to parse parts of cleartext signature"))?;
+
+        let ascii_armor = AsciiArmor::from_parts(ascii_armor_parts)?;
+
+        if !ascii_armor.verify() {
+            return Err(anyhow!(
+                "ascii armor failed to verify: checksum did not match"
+            ));
+        }
+
+        let mut packets = ascii_armor.into_pgp_packets()?;
+
+        if let PgpPacket::SignaturePacket(signature) = packets.pop().unwrap() {
+            Ok(CleartextSignature {
+                hash,
+                cleartext,
+                signature,
+            })
+        } else {
+            Err(anyhow!("did not find a signature packet"))
+        }
+    }
+}
+```
+
+This parses the parts of the cleartext signature using the function we just built, does some extra work with the ASCII armor (which we'll talk about in the next section) and then returns the Cleartext signature or an `Err`. Note that this function, even though it's named `parse` does more work than just parsing. Because of that, I chose to have it return a normal `Result` (actually an `anyhow::Result` for simplicity) rather than a nom `IResult`, because errors that can occur in this function aren't strictly parsing errors. Another error that could occur is the ASCII armor contained doesn't have a valid checksum. That's a nice segue into the next section, parsing and validating ASCII armor.
 
 ### ASCII Armor
 
-## Signature Packets
+### PGP Packets
 
-## Key packets
+### Signature Packets
+
+### Key packets
 
 ## Putting it all together
 
