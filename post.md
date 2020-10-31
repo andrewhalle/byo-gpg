@@ -442,15 +442,169 @@ This parses the parts of the cleartext signature using the function we just buil
 
 ### ASCII Armor
 
+PGP defines a number of data structures for implementations to use. ASCII armor is a method of communicating those data structures, which are expressed as bytes, between implementations. ASCII armor makes use of base64 text and special headers to communicate those raw bytes and their meaning.
+
+Let's start by writing a nom parser for base64 text. I'll use the fact that my PGP implementation writes out base64 chunks in lines of 64 characters (I believe all implementations would do this, but I couldn't find a quick reference for it in the RFC. I don't consider it an important detail).
+
+We start in the same way we started with parsing a chunk of dash-escaped text
+
+```rust
+/// Parse a chunk of base64 encoded text.
+pub fn parse_base64(input: &str) -> IResult<&str, String> {
+    let (input, mut base64) = fold_into_string(input, parse_base64_line)?;
+
+    if input.chars().next() == Some('=') {
+        return Ok((input, base64));
+    }
+
+    let (input, remaining) = take_while(is_base64_digit)(input)?;
+    let (input, _) = newline(input)?;
+
+    base64.push_str(remaining);
+
+    Ok((input, base64))
+}
+```
+
+`parse_base64` is a nom parser which returns an owned `String` if successful. It uses the same `fold_into_string` helper from the last section, and the parser passed to that function is `parse_base64_line` which takes one line of length 64 characters which is made up entirely of base64 characters. Then, `parse_base64` takes whatever remaining base64 characters that were not on a whole line. It will not take a line that begins with a `=` (I'll explain this later). Then, it returns the chunk of base64 that was parsed. `parse_base64_line` is given by
+
+```rust
+/// Parse a single line of length BASE64_LINE_LENGTH which contains only base64 characters.
+/// (and does not begin with an '='.)
+fn parse_base64_line(input: &str) -> IResult<&str, &str> {
+    if input.chars().next() == Some('=') {
+        return Err(nom::Err::Error((input, nom::error::ErrorKind::Char)));
+    }
+
+    let (input, res) =
+        take_while_m_n(BASE64_LINE_LENGTH, BASE64_LINE_LENGTH, is_base64_digit)(input)?;
+    let (input, _) = newline(input)?;
+
+    Ok((input, res))
+}
+```
+
+_(note: there's a bug in these two functions in that something like `a=a=a=a=` would be allowed, even though that's not valid base64. it would be caught in the next section when we turn that base64 string into bytes, but if I were to re-write this, I would make the parser aware of the fact that once it sees any `=` to stop parsing, by parsing sequences of 4 characters, either of the form `aaa=`, `aa==`, or `aaaa`. The reason that these are the only possibilities is that 4 base64 characters represent 3 bytes, with each character representing 6 bits. If we have 1 byte of data and 2 bytes of padding, the last 2 bits from our 8-bit byte leak into the second character, so the most padding we can have is two `=`.)_
+
+With our base64 parsing functions in hand, we can look at the structure of the ASCII armor given in the [RFC](https://tools.ietf.org/html/rfc4880#section-6.2).
+
+  * an armor header, e.g. `-----BEGIN PGP SIGNATURE-----`
+  * armor headers, `Key: Value` pairs
+  * a blank line
+  * the ASCII-armored data, the first base64 chunk we will parse
+  * an armor checksum, will go over this in detail shortly
+  * the armor tail, e.g. `-----END PGP SIGNATURE-----` needs to match the header
+
+The armor checksum is a quick checksum over the data encoded by the ASCII armor. It is produced by the CRC-24 algorithm, a C version of which is [given](https://tools.ietf.org/html/rfc4880#section-6.1) in the RFC. Here is a direct translation of that code into Rust.
+
+```rust
+/// Implementation of CRC24 directly from the RFC.
+/// https://tools.ietf.org/html/rfc4880#section-6.1
+fn crc24(data: &[u8]) -> u32 {
+    let mut crc = CRC24_INIT;
+    for curr in data.iter() {
+        crc ^= (*curr as u32) << 16;
+        for _ in 0..8 {
+            crc <<= 1;
+            if crc & 0x1000000 != 0 {
+                crc ^= CRC24_POLY;
+            }
+        }
+    }
+
+    crc & 0xFFFFFF
+}
+```
+
+In order to parse ASCII armor, let's start with a struct to parse into.
+
+```rust
+#[derive(Debug)]
+pub struct AsciiArmor {
+    kind: AsciiArmorKind,
+    data: Vec<u8>,
+    checksum: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AsciiArmorKind {
+    Signature,
+    PublicKey,
+}
+```
+
+The `kind` field will store the type of header/tail we parsed, the `data` field will hold the bytes of the data contained by the ASCII armor, and the `checksum` field will hold the checksum bytes. In the last section, we decided that we should have separate `AsciiArmor::from_parts` and `AsciiArmor::verify` functions, which makes sense because an invalid checksum is not really a parsing error, so we want to return that error separately. The parsing function is given below
+
+```rust
+pub fn parse_ascii_armor_parts(input: &str) -> IResult<&str, AsciiArmorParts> {
+    let parser = tuple((
+        alt((
+            tag("-----BEGIN PGP SIGNATURE-----\n\n"),
+            tag("-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n"),
+        )),
+        parse_base64,
+        char('='),
+        parse_base64,
+    ));
+    // needs to match the beginning tag("-----END PGP SIGNATURE-----\n"),
+
+    let (input, (header, data, _, checksum)) = parser(input)?;
+
+    let (kind, footer) = match header {
+        "-----BEGIN PGP SIGNATURE-----\n\n" => {
+            (AsciiArmorKind::Signature, "-----END PGP SIGNATURE-----\n")
+        }
+        "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n" => (
+            AsciiArmorKind::PublicKey,
+            "-----END PGP PUBLIC KEY BLOCK-----\n",
+        ),
+        _ => unreachable!(),
+    };
+
+    let (input, _) = tag(footer)(input)?;
+
+    Ok((input, (kind, data, checksum)))
+}
+```
+
+We start by recognizing the header (we'll only need signature and public key types for our purposes), then a base64 chunk, then a single `=`, then another base64 chunk. This is why we didn't allow any lines to begin with `=` in our `parse_base64_line` function, a line that begins with an equal sign marks the start of the checksum. The `parse_ascii_armor_parts` function is called from `CleartextSignature::parse`, and we pass the parts into `AsciiArmor::from_parts`. We then use `AsciiArmor::verify` to verify that the checksum is valid (see last section for the usages). Those functions are given by
+
+```rust
+impl AsciiArmor {
+    pub fn from_parts(parts: AsciiArmorParts) -> anyhow::Result<AsciiArmor> {
+        let (kind, data, checksum) = parts;
+
+        let data = base64::decode(&data)?;
+        let checksum = base64::decode(&checksum)?;
+
+        Ok(AsciiArmor {
+            kind,
+            data,
+            checksum,
+        })
+    }
+
+    pub fn verify(&self) -> bool {
+        let checksum_computed = crc24(self.data.as_slice());
+        let checksum_stored = (self.checksum[0] as u32) << 16
+            | (self.checksum[1] as u32) << 8
+            | (self.checksum[2] as u32);
+
+        checksum_computed == checksum_stored
+    }
+}
+```
+
+There's one more function that we specified in the last section that we would need, `AsciiArmor::into_pgp_packets`. In order to implement that function, let's discuss the data structures that are described in the RFC, PGP packets.
+
 ### PGP Packets
 
 ### Signature Packets
 
 ### Key packets
 
-## Putting it all together
+## Putting it all together (`AsciiArmor::into_pgp_packets`)
 
 ## Going forward
-
 
 ## Conclusion
