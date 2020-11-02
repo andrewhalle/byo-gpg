@@ -599,11 +599,148 @@ There's one more function that we specified in the last section that we would ne
 
 ### PGP Packets
 
+A PGP message consists of a sequence of data structures known as *packets*. Each packet contains one particular piece of information required for the particular PGP function. In our program, we'll only concern ourselves with signature packets and public key packets, but some other types of packets are "User ID Packet" (for communicating information about who a key belongs to) and "Compressed Data Packet" (for actual encrypted data).
+
+All PGP packets begin with the same header, that gives information about what type of packet is contained, and how big it is. There are two types of header, new format and old format. In this post, we only implement parsing old format packets (because that's all GPG seems to produce on my system).
+
+First, we'll make an enum for PGP packets.
+
+```rust
+#[derive(Debug)]
+pub enum PgpPacket {
+    SignaturePacket(SignaturePacket),
+    PublicKeyPacket(PublicKeyPacket),
+    // Ignored
+    UserIdPacket,
+    PublicSubkeyPacket,
+}
+
+```
+
+I've made `SignaturePacket` and `PublicKeyPacket` hold their data in separate structs with the same name (I'll cover those structs in future sections). I've included variants for `UserIdPacket` and `PublicSubkeyPacket` because my GPG produces this packets, so I want to recognize them and ignore them.
+
+Packets are formed from sequences of bytes. Because of this, our nom parsers for packets will have a different form than our parsers have thus far. Whereas we've been using parsers of the form
+
+```rust
+fn string_parser<T>(input: &str) -> IResult<&str, T>
+```
+
+our packet parsers will have the form
+
+```rust
+fn bytes_parser<T>(input: &[u8]) -> IResult<&[u8], T>
+```
+
+so that we can work with the raw bytes. The top-level function we'll need is a nom parser to turn bytes into a sequence of packets (I'll use `Vec<PgpPacket>` and copy data to avoid ownership issues).
+
+```rust
+pub fn parse_pgp_packets(input: &[u8]) -> IResult<&[u8], Vec<PgpPacket>> {
+    let parser = all_consuming(many0(parse_pgp_packet));
+
+    let (empty, packets) = parser(input)?;
+
+    Ok((empty, packets))
+}
+```
+
+This parser repeatedly calls `parse_pgp_packet` (which puts each packet parsed into a `Vec`) and ensures that no input remains. `parse_pgp_packet` is given by
+
+```rust
+pub fn parse_pgp_packet(input: &[u8]) -> IResult<&[u8], PgpPacket> {
+    let (input, (packet_tag, length_type)): (&[u8], (PgpPacketTag, u8)) =
+        bits::<_, _, (_, _), _, _>(|input| {
+            let (input, _): (_, usize) = take_bits(2_usize)(input)?;
+            let (input, packet_tag): (_, u8) = take_bits(4_usize)(input)?;
+            let (input, length_type) = take_bits(2_usize)(input)?;
+
+            Ok((input, (packet_tag.into(), length_type)))
+        })(input)?;
+
+    let length = match length_type {
+        0 => 1,
+        1 => 2,
+        2 => 4,
+        3 => u32::MAX,
+        _ => panic!("unrecognized length_type"),
+    };
+
+    let (input, mut packet_length) = take(length)(input)?;
+    let packet_length = match length {
+        1 => packet_length.read_u8().unwrap().into(),
+        2 => packet_length.read_u16::<BigEndian>().unwrap().into(),
+        4 => packet_length.read_u32::<BigEndian>().unwrap(),
+        _ => unreachable!(),
+    };
+    let (input, data) = take(packet_length)(input)?;
+
+    let parser = all_consuming(match packet_tag {
+        PgpPacketTag::Signature => parse_signature_packet,
+        PgpPacketTag::PublicKey => parse_public_key_packet,
+        PgpPacketTag::UserId => parse_user_id_packet,
+        PgpPacketTag::PublicSubkey => parse_public_subkey_packet,
+        _ => unreachable!(),
+    });
+
+    let (_, packet): (&[u8], PgpPacket) = parser(data)?;
+
+    Ok((input, packet))
+}
+```
+
+This is a longer function, so let's take it section by section. The first section parses the packet tag (what type of packet it is) and the length type. `bits` turns a byte-oriented nom parser into a bit-oriented nom parser, which is important because multiple pieces of information are contained in one byte of the header. We also define the enum `PgpPacketTag` for simplicity
+
+```rust
+#[derive(Debug)]
+pub enum PgpPacketTag {
+    Signature,
+    PublicKey,
+    UserId,
+    PublicSubkey,
+    Ignored,
+}
+
+impl From<u8> for PgpPacketTag {
+    fn from(val: u8) -> Self {
+        match val {
+            2 => PgpPacketTag::Signature,
+            6 => PgpPacketTag::PublicKey,
+            13 => PgpPacketTag::UserId,
+            14 => PgpPacketTag::PublicSubkey,
+            _ => PgpPacketTag::Ignored,
+        }
+    }
+}
+```
+
+we also implement the `From<u8>` for the new enum, so we can easily get a packet tag from a byte. In the next section of `parse_pgp_packet`, we get the length of the packet based on the length type. The length type indicates how many bytes comprise the length, and we use the `byteorder` crate to read those bytes as a big-endian number. We then parse `length` bytes, and pass those bytes to a particular subparser based on the packet tag. `parse_user_id_packet` and `parse_public_subkey_packet` are dummy functions that will just parse all the bytes, for the purposes of explicitly ignoring those packet types. We'll implement `parse_signature_packet` and `parse_public_key_packet` in the next couple of sections.
+
+_(note: I found [pgpdump](https://github.com/kazu-yamamoto/pgpdump) very useful while implementing this section. `pgpdump` is a tool for dumping the contents of PGP packets, like so_
+
+```
+$ pgpdump tests/01/msg.txt.asc
+Old: Signature Packet(tag 2)(307 bytes)
+        Ver 4 - new
+        Sig type - Signature of a canonical text document(0x01).
+        Pub alg - RSA Encrypt or Sign(pub 1)
+        Hash alg - SHA256(hash 8)
+        Hashed Sub: issuer fingerprint(sub 33)(21 bytes)
+         v4 -   Fingerprint - 2e cf 30 1f e9 18 f4 73 a8 65 51 0c 84 fa 31 82 76 01 7b 00
+        Hashed Sub: signature creation time(sub 2)(4 bytes)
+                Time - Fri Oct  2 18:51:15 PDT 2020
+        Sub: issuer key ID(sub 16)(8 bytes)
+                Key ID - 0x84FA318276017B00
+        Hash left 2 bytes - 22 53
+        RSA m^d mod n(2045 bits) - ...
+                -> PKCS-1
+```
+
+_Here we see a dumped signature packet, which is the next thing we'll parse...)_
+
 ### Signature Packets
 
-### Key packets
+### Public Key packets
 
-## Putting it all together (`AsciiArmor::into_pgp_packets`)
+### Putting it all together (`AsciiArmor::into_pgp_packets`)
 
 ## Going forward
 
