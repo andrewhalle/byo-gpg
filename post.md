@@ -1,6 +1,6 @@
 # Build your own: GPG
 
-By: [Andrew Halle](https://github.com/andrewhalle)
+By: [Andrew Halle](https://github.com/andrewhalle)<br/>
 Repo: [byo-gpg](https://github.com/andrewhalle/byo-gpg)
 
 Part of [build-your-own](https://github.com/andrewhalle/build-your-own)
