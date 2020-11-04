@@ -22,6 +22,12 @@ impl PublicKey {
             .map_err(|_| anyhow!("could not parse ascii armor parts"))?;
 
         let ascii_armor = AsciiArmor::from_parts(parts)?;
+        if !ascii_armor.verify() {
+            return Err(anyhow!(
+                "ascii armor failed to verify: checksum did not match"
+            ));
+        }
+
         let packets = ascii_armor.into_pgp_packets()?;
 
         // this is a bit hacky, I know my keys will have the key used for signing as
